@@ -12,15 +12,16 @@ class LinearJointSegment:
     def f_prime(self, s):
         return self.m
 
-    def f_double_prime(self, s):
+    def f_prime2(self, s):
         return 0
 
 class JointPath:
-    def __init__(self, joint_positions, velocity_constraint):
+    def __init__(self, joint_positions, vel_constraint, accel_constraint):
         # joint_positions = list of thetas for a single joint
         # ex. joint1 = [30, 90, 60, 60]
-        # velocity_constraint = q-dot-max for the joint
-        self.q_dot_max = velocity_constraint
+        # vel_constraint = q-dot-max for the joint
+        self.q_dot_max = vel_constraint
+        self.q_dot2_max = accel_constraint
         self.segments = []
         self.s_interval = 1/len(joint_positions)
         start_pos = 0
@@ -40,6 +41,6 @@ class JointPath:
         segment_idx = math.floor(s/self.s_interval)
         return self.segments[segment_idx].f_prime(s)
 
-    def f_double_prime(self, s):
+    def f_prime2(self, s):
         segment_idx = math.floor(s/self.s_interval)
-        return self.segments[segment_idx].f_double_prime(s)
+        return self.segments[segment_idx].f_prime2(s)

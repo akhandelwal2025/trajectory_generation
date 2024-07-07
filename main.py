@@ -3,6 +3,7 @@ from Limit import *
 import constants
 import matplotlib.pyplot as plt
 import numpy as np
+import time
 
 class Trajectory:
     def __init__(self, waypoints, vel_constraints, accel_constraints):
@@ -21,13 +22,24 @@ class Trajectory:
         
         self.limit_curve = LimitCurve(self.joint_paths)
 
+        # prev timestep - used for collision-checking
+        self.prev_s = 0
+        self.prev_s_dot = 0
+
+        # curr timestep
+        self.curr_s = 0
+        self.curr_s_dot = 0
+
+        # store (s, s_dot) pairs for viz purposes
+        self.path = []
+
         # matplotlib stuff
         self.fig, self.axs = plt.subplots(2, 2, figsize=(10, 8))
 
     """
         Definitions:
         - inflection point: s-value where the limit curve bound changes
-    
+
         Meat of the algorithm (Arbys)
         1. Start at (s=0, s-dot=0)
         2. Integrate forward w/ max accel until you intersect the limit curve
@@ -44,8 +56,68 @@ class Trajectory:
         6. Repeat steps 2-5 until done condition  
     """
     def generate_trajectory(self):
-        pass
+        while not self.done():
+            # step 2
+            while not self.find_collisions():
+                self.integrate_forward()
 
+            break
+    """
+        two cases for collisions
+            a. abs(s_dot - limit_curve(s)) <= epsilon
+                i. do nothing - s_dot is within bounds for a collision
+            b. s_dot > limit_curve(s) && abs(s_dot - limit_curve(s)) > epsilon
+                i. need to go backward to find a precise collision point
+    """
+    def find_collisions(self):
+        lim_curve_s_dot = self.limit_curve.evaluate(self.curr_s)
+        if self.curr_s_dot < lim_curve_s_dot and (lim_curve_s_dot - self.curr_s_dot) > constants.epsilon:
+            print(f"     lim_curve: {lim_curve_s_dot} | self.curr_s_dot: {self.curr_s_dot} | diff: {lim_curve_s_dot - self.curr_s_dot}")
+            self.path.append((self.curr_s, self.curr_s_dot))
+            return False
+        
+        # case a
+        if abs(lim_curve_s_dot - self.curr_s_dot) <= constants.epsilon:
+            self.path.append((self.curr_s, self.curr_s_dot))
+            return True
+
+        # case b - find (s, s_dot) for precise collision point
+        lower_timestep = 0
+        upper_timestep = constants.timestep
+        while self.curr_s_dot > lim_curve_s_dot and abs(lim_curve_s_dot - self.curr_s_dot) > constants.epsilon: 
+            print("stuck in this loops")
+            print(f"     lim_curve: {lim_curve_s_dot} | self.curr_s_dot: {self.curr_s_dot} | diff: {lim_curve_s_dot - self.curr_s_dot}")
+            print(f"     lower: {lower_timestep} | upper: {upper_timestep}")
+            timestep = (lower_timestep + upper_timestep) / 2
+            max_s_dot2 = self.calc_max_s_dot2(self.prev_s)
+            self.curr_s_dot = self.prev_s_dot + max_s_dot2 * timestep # v_final = v_initial + a*delta_t
+            self.curr_s = self.prev_s + (self.prev_s_dot * timestep) + (0.5 * max_s_dot2 * (timestep ** 2))# s_final = s_initial + v_initial*delta_t + 1/2*a*delta_t^2 
+    
+            # if resulting s_dot is above lim_curve_s_dot, then set upper_timestep = timestep
+            lim_curve_s_dot = self.limit_curve.evaluate(self.curr_s)
+            if self.curr_s_dot > lim_curve_s_dot:
+                upper_timestep = timestep
+            else:
+                lower_timestep = timestep
+            time.sleep(0.05)
+        self.path.append((self.curr_s, self.curr_s_dot))
+        return True
+
+    def integrate_forward(self):
+        # curr_s, curr_s_dot will be overwritten. need to store them in prev_s, prev_s_dot
+        self.prev_s = self.curr_s
+        self.prev_s_dot = self.curr_s_dot
+
+        max_s_dot2 = self.calc_max_s_dot2(self.prev_s)
+        self.curr_s_dot = self.prev_s_dot + max_s_dot2 * constants.timestep # v_final = v_initial + a*delta_t
+        self.curr_s = self.prev_s + (self.prev_s_dot * constants.timestep) + (0.5 * max_s_dot2 * (constants.timestep ** 2)) # s_final = s_initial + v_initial*delta_t + 1/2*a*delta_t^2 
+    
+    # check if trajectory has reached the end 
+    def done(self):
+        return self.curr_s >= 1
+
+    # take waypoints for each joint (i.e. joint angles) and convert them into a continuous path for the joint to follow
+    # class JointPath generates piece-wise function that dictates the path of each joint through s-space
     def generate_joint_paths(self):
         all_joints = list(zip(*self.waypoints)) # groups all joint positions together
         assert(len(all_joints) == len(self.vel_constraints) == len(self.accel_constraints))
@@ -64,7 +136,7 @@ class Trajectory:
         min_s_dot2 = float('-inf')
         for joint_i in self.joint_paths:
             if joint_i.f_prime(s) != 0:
-                min_s_dot2 = max(min_s_dot2, (-1*joint_i.accel_constraint)/abs(joint_i.f_prime(s)))
+                min_s_dot2 = max(min_s_dot2, (-1*joint_i.q_dot2_max)/abs(joint_i.f_prime(s)))
         return min_s_dot2
 
     # implementing eqn 23
@@ -73,7 +145,7 @@ class Trajectory:
         max_s_dot2 = float('inf')
         for joint_i in self.joint_paths:
             if joint_i.f_prime(s) != 0:
-                max_s_dot2 = min(max_s_dot2, joint_i.accel_constraint/abs(joint_i.f_prime(s)))
+                max_s_dot2 = min(max_s_dot2, joint_i.q_dot2_max/abs(joint_i.f_prime(s)))
         return max_s_dot2
 
     def plot_segments(self):
@@ -82,20 +154,26 @@ class Trajectory:
             theta = [joint_path.f(i) for i in s]
 
             if i == 0:
-                self.axs[0, 0].scatter(s, theta)
+                self.axs[0, 0].scatter(s, theta, s=2)
             elif i == 1:
-                self.axs[0, 1].scatter(s, theta)
+                self.axs[0, 1].scatter(s, theta, s=2)
             else:
-                self.axs[1, 0].scatter(s, theta)
+                self.axs[1, 0].scatter(s, theta, s=2)
     
     def plot_limit_curve(self):
+        # plot limit curve
         s = np.linspace(0, 1, 500)[:-1]
         s_dot_max = [self.limit_curve.evaluate(i) for i in s]
-        self.axs[1, 1].scatter(s, s_dot_max)
+        self.axs[1, 1].scatter(s, s_dot_max, s=2)
+
+        # plot path
+        s, s_dot_max = list(zip(*self.path))
+        self.axs[1, 1].scatter(s, s_dot_max, s=2)    
 
 def main():
     traj = Trajectory(constants.waypoints, constants.velocity_constraints, constants.accel_constraints)
     traj.plot_segments()
+    traj.generate_trajectory()
     traj.plot_limit_curve()
     plt.tight_layout()
     plt.show()

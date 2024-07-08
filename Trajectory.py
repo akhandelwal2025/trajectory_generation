@@ -32,7 +32,8 @@ class Trajectory:
         self.curr_s_dot = 0
 
         # store (s, s_dot) pairs for viz purposes
-        self.path = []
+        self.forward_path = []
+        self.backward_path = []
 
         # matplotlib stuff
         self.fig, self.axs = plt.subplots(2, 2, figsize=(10, 8))
@@ -62,6 +63,63 @@ class Trajectory:
             while not self.done() and not self.find_limit_curve_collisions():
                 self.integrate_forward()
             break
+    
+    """
+        given:
+            - (self.curr_s, self.curr_s_dot)
+            - (self.prev_s, self.prev_s_dot)
+            - path: [(s1, s_dot1), (s2, s_dot2), ...]
+        goal:
+            - find if the line segment formed by (self.curr_s, self.curr_s_dot) and (self.prev_s, self.prev_s_dot)
+              intersects with any line segment on the path
+            - if it does, then calculate the collision point and return that
+        procedure:
+            - calculate slope + bias for line segment formed by (self.curr_s, self.curr_s_dot) and (self.prev_s, self.prev_s_dot)
+            - for each pair of consecutive points in the path:
+                - calculate slop + bias for the line segment
+                - find intersection point with curr-prev line segment calculated earlier
+                - if intersection point is within rectangle formed by both line segments, then its a collision point and return that
+    """
+    def find_path_collision(self, path):
+        back_a, back_b, back_c = self.calc_a_b_c((self.curr_s, self.curr_s_dot), (self.prev_s, self.prev_s_dot))
+
+        for i in range(1, len(path)):
+            forw_a, forw_b, forw_c = self.calc_a_b_c(path[i-1], path[i])
+            x = [
+                [forw_a, forw_b],
+                [back_a, back_b]
+            ]
+            y = [forw_c, back_c]
+            """
+                solving the following system of equations to find intersection point:
+                    a1X + b1Y = c1
+                    a2X + b2Y = c2
+            """
+            intersection_pt = np.linalg.solve(x, y)
+            if self.curr_s <= intersection_pt[0] <= self.prev_s and \
+               path[i-1][0] <= intersection_pt[0] <= path[i][0] and \
+               self.curr_s_dot >= intersection_pt[1] >= self.prev_s_dot and \
+               path[i-1][1] <= intersection_pt[1] <= path[i][1]:
+                return intersection_pt
+        return None
+    
+    # pt1 = (s1, s_dot1), pt2 = (s1, s_dot2)
+    def calc_a_b_c(self, pt1, pt2):
+        s1, s_dot1 = pt1
+        s2, s_dot2 = pt2
+        m = (s_dot2 - s_dot1) / (s2 - s1) # (y2-y1)/(x2-x1)
+        """
+            point-slope formula: y - y1 = m(x - x1)
+            -> y = mx + (-mx1 - y1)
+            -> -mx + y = (-mx1 - y1)
+            -> mx - y = (mx1 + y1)
+            -> a = m, b = -1, c = mx1 + y1
+        """
+        a = m
+        b = -1
+        c = m * s1 + s_dot1
+        return a, b, c
+
     """
         two cases for collisions
             a. abs(s_dot - limit_curve(s)) <= epsilon
@@ -69,15 +127,21 @@ class Trajectory:
             b. s_dot > limit_curve(s) && abs(s_dot - limit_curve(s)) > epsilon
                 i. need to go backward to find a precise collision point
     """
-    def find_limit_curve_collisions(self):
+    def find_limit_curve_collisions(self, forward):
         lim_curve_s_dot = self.limit_curve.evaluate(self.curr_s)
         if self.curr_s_dot < lim_curve_s_dot and (lim_curve_s_dot - self.curr_s_dot) > constants.epsilon:
-            self.path.append((self.curr_s, self.curr_s_dot))
+            if forward:
+                self.forward_path.append((self.curr_s, self.curr_s_dot))
+            else:
+                self.backward_path.append((self.curr_s, self.curr_s_dot))
             return False
         
         # case a
         if abs(lim_curve_s_dot - self.curr_s_dot) <= constants.epsilon:
-            self.path.append((self.curr_s, self.curr_s_dot))
+            if forward:
+                self.forward_path.append((self.curr_s, self.curr_s_dot))
+            else:
+                self.backward_path.append((self.curr_s, self.curr_s_dot))
             return True
 
         # case b - find (s, s_dot) for precise collision point
@@ -95,7 +159,10 @@ class Trajectory:
                 upper_timestep = timestep
             else:
                 lower_timestep = timestep
-        self.path.append((self.curr_s, self.curr_s_dot))
+        if forward:
+            self.forward_path.append((self.curr_s, self.curr_s_dot))
+        else:
+            self.backward_path.append((self.curr_s, self.curr_s_dot))
         return True
 
     def integrate_forward(self):

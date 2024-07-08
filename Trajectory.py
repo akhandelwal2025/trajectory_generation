@@ -97,16 +97,17 @@ class Trajectory:
         for s_i, s in enumerate(all_waypoint_s):
             # populate positions
             for joint_i, joint_path in enumerate(self.joint_paths):
-                positions[s_i, joint_i] = joint_path.f(s)
+                positions[s_i, joint_i] = np.deg2rad(joint_path.f(s))
 
             s_dot, time = self.extract_s_dot_time(s)
 
             # populate velocities - theta-dot = q_prime(s) * s_dot
             for joint_i, joint_path in enumerate(self.joint_paths):            
-                velocities[s_i, joint_i] = joint_path.f_prime(s) * s_dot
+                velocities[s_i, joint_i] = np.deg2rad(joint_path.f_prime(s) * s_dot)
             
             # populate time for the waypoint
             times[s_i] = time
+        
         self.plot_output_positions(positions, times)
         self.plot_velocity(velocities, times)
         print(positions)
@@ -328,9 +329,9 @@ class Trajectory:
             s = np.linspace(0, 1, 500)[:-1]
             theta = [joint_path.f(i) for i in s]
 
-            self.axs[0, 0].scatter(s, theta, s=2)
-            self.axs[0, 0].scatter(s, theta, s=2)
-            self.axs[0, 0].scatter(s, theta, s=2)
+            self.axs[1, 0].scatter(s, theta, s=2)
+            self.axs[1, 0].scatter(s, theta, s=2)
+            self.axs[1, 0].scatter(s, theta, s=2)
     
     def plot_output_positions(self, positions, times):
         for i in range(len(self.joint_paths)):

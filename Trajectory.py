@@ -60,10 +60,26 @@ class Trajectory:
     def generate_trajectory(self):
         while not self.done():
             # step 2
-            while not self.done() and not self.find_limit_curve_collisions():
+            while not self.done() and not self.find_limit_curve_collisions(forward=True):
                 self.integrate_forward()
+
+            # step 3
+            self.find_next_inflection_pt()
+            print(self.curr_s, self.curr_s_dot)
+            while not self.done() and not self.find_path_collision(self.forward_path) and not self.find_limit_curve_collisions(forward=False):
+                self.integrate_backward()
             break
     
+    def find_next_inflection_pt(self):
+        self.curr_s = min(1.0, self.curr_s)
+        for inflection_pt in self.inflection_pts:
+            if self.curr_s <= inflection_pt[0]:
+                self.curr_s = inflection_pt[0]
+                self.curr_s_dot = inflection_pt[1]
+                return
+
+        raise Exception(f"shouldn't be here: {self.curr_s} > 1")
+        
     """
         given:
             - (self.curr_s, self.curr_s_dot)
@@ -90,12 +106,16 @@ class Trajectory:
                 [back_a, back_b]
             ]
             y = [forw_c, back_c]
+            print(x, y)
             """
                 solving the following system of equations to find intersection point:
                     a1X + b1Y = c1
                     a2X + b2Y = c2
             """
-            intersection_pt = np.linalg.solve(x, y)
+            try:
+                intersection_pt = np.linalg.solve(x, y)
+            except:
+                continue # no solution or infinitely many solutions (both of which we don't care about)
             if self.curr_s <= intersection_pt[0] <= self.prev_s and \
                path[i-1][0] <= intersection_pt[0] <= path[i][0] and \
                self.curr_s_dot >= intersection_pt[1] >= self.prev_s_dot and \
@@ -149,9 +169,14 @@ class Trajectory:
         upper_timestep = constants.timestep
         while self.curr_s_dot > lim_curve_s_dot and abs(lim_curve_s_dot - self.curr_s_dot) > constants.epsilon: 
             timestep = (lower_timestep + upper_timestep) / 2
-            max_s_dot2 = self.calc_max_s_dot2(self.prev_s)
-            self.curr_s_dot = self.prev_s_dot + max_s_dot2 * timestep # v_final = v_initial + a*delta_t
-            self.curr_s = self.prev_s + (self.prev_s_dot * timestep) + (0.5 * max_s_dot2 * (timestep ** 2))# s_final = s_initial + v_initial*delta_t + 1/2*a*delta_t^2 
+            if forward:
+                max_s_dot2 = self.calc_max_s_dot2(self.prev_s)
+                self.curr_s_dot = self.prev_s_dot + max_s_dot2 * timestep # v_final = v_initial + a*delta_t
+                self.curr_s = self.prev_s + (self.prev_s_dot * timestep) + (0.5 * max_s_dot2 * (timestep ** 2))# s_final = s_initial + v_initial*delta_t + 1/2*a*delta_t^2 
+            else:
+                min_s_dot2 = self.calc_min_s_dot2(self.prev_s)
+                self.curr_s_dot = self.prev_s_dot - min_s_dot2 * timestep # v_final = v_initial + a*delta_t
+                self.curr_s = self.prev_s - (self.prev_s_dot * timestep) + (0.5 * min_s_dot2 * (timestep ** 2)) # s_final = s_initial + v_initial*delta_t + 1/2*a*delta_t^2 
     
             # if resulting s_dot is above lim_curve_s_dot, then set upper_timestep = timestep
             lim_curve_s_dot = self.limit_curve.evaluate(self.curr_s)
@@ -165,19 +190,27 @@ class Trajectory:
             self.backward_path.append((self.curr_s, self.curr_s_dot))
         return True
 
+    def integrate_backward(self):
+        # curr_s, curr_s_dot will be overwritten. need to store them in prev_s, prev_s_dot
+        self.prev_s = self.curr_s
+        self.prev_s_dot = self.curr_s_dot
+
+        min_s_dot2 = self.calc_min_s_dot2(self.prev_s)
+        self.curr_s_dot = self.prev_s_dot - min_s_dot2 * constants.timestep # v_final = v_initial + a*delta_t
+        self.curr_s = self.prev_s - (self.prev_s_dot * constants.timestep) + (0.5 * min_s_dot2 * (constants.timestep ** 2)) # s_final = s_initial + v_initial*delta_t + 1/2*a*delta_t^2 
+    
     def integrate_forward(self):
         # curr_s, curr_s_dot will be overwritten. need to store them in prev_s, prev_s_dot
         self.prev_s = self.curr_s
         self.prev_s_dot = self.curr_s_dot
 
         max_s_dot2 = self.calc_max_s_dot2(self.prev_s)
-        print(max_s_dot2)
         self.curr_s_dot = self.prev_s_dot + max_s_dot2 * constants.timestep # v_final = v_initial + a*delta_t
         self.curr_s = self.prev_s + (self.prev_s_dot * constants.timestep) + (0.5 * max_s_dot2 * (constants.timestep ** 2)) # s_final = s_initial + v_initial*delta_t + 1/2*a*delta_t^2 
     
     # check if trajectory has reached the end 
     def done(self):
-        return self.curr_s >= 1
+        return self.curr_s < 0 or self.curr_s > 1
 
     # take waypoints for each joint (i.e. joint angles) and convert them into a continuous path for the joint to follow
     # class JointPath generates piece-wise function that dictates the path of each joint through s-space
@@ -230,8 +263,12 @@ class Trajectory:
         self.axs[1, 1].scatter(s, s_dot_max, s=2)
 
     def plot_path(self):
-        # plot path
-        s, s_dot_max = list(zip(*self.path))
+        # plot forward path
+        s, s_dot_max = list(zip(*self.forward_path))
+        self.axs[1, 1].scatter(s, s_dot_max, s=2)   
+
+        # plot backward path
+        s, s_dot_max = list(zip(*self.backward_path))
         self.axs[1, 1].scatter(s, s_dot_max, s=2)   
 
     def plot_inflection_pts(self):

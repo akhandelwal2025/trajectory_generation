@@ -39,7 +39,6 @@ class JointPath:
 
     def f_prime(self, s):
         s = min(0.999999999999999, s) #TODO: put in right now as a stop gap to allow 1.0 to be evaluated
-        print(f"f_prime_s: {s}")
         segment_idx = math.floor(s/self.s_interval)
         return self.segments[segment_idx].f_prime(s)
 

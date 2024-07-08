@@ -34,7 +34,7 @@ class Trajectory:
         # store (s, s_dot) pairs for viz purposes
         self.forward_path = []
         self.backward_path = []
-
+        self.intersection_pts = []
         # matplotlib stuff
         self.fig, self.axs = plt.subplots(2, 2, figsize=(10, 8))
 
@@ -101,28 +101,44 @@ class Trajectory:
 
         for i in range(1, len(path)):
             forw_a, forw_b, forw_c = self.calc_a_b_c(path[i-1], path[i])
-            x = [
-                [forw_a, forw_b],
-                [back_a, back_b]
-            ]
-            y = [forw_c, back_c]
-            print(x, y)
-            """
-                solving the following system of equations to find intersection point:
-                    a1X + b1Y = c1
-                    a2X + b2Y = c2
-            """
-            try:
-                intersection_pt = np.linalg.solve(x, y)
-            except:
-                continue # no solution or infinitely many solutions (both of which we don't care about)
-            if self.curr_s <= intersection_pt[0] <= self.prev_s and \
-               path[i-1][0] <= intersection_pt[0] <= path[i][0] and \
-               self.curr_s_dot >= intersection_pt[1] >= self.prev_s_dot and \
-               path[i-1][1] <= intersection_pt[1] <= path[i][1]:
-                return intersection_pt
+            # x = [
+            #     [forw_a, forw_b],
+            #     [back_a, back_b]
+            # ]
+            # y = [forw_c, back_c]
+            # """
+            #     solving the following system of equations to find intersection point:
+            #         a1X + b1Y = c1
+            #         a2X + b2Y = c2
+            # """
+            # try:
+            #     intersection_pt = np.linalg.solve(x, y)
+            #     self.intersection_pts.append(intersection_pt)
+            # except:
+            #     continue # no solution or infinitely many solutions (both of which we don't care about)
+
+            # if self.curr_s <= intersection_pt[0] <= self.prev_s and \
+            #    path[i-1][0] <= intersection_pt[0] <= path[i][0] and \
+            #    self.curr_s_dot >= intersection_pt[1] >= self.prev_s_dot and \
+            #    path[i-1][1] <= intersection_pt[1] <= path[i][1]:
+            #     return intersection_pt
+            A = (self.curr_s, self.curr_s_dot)
+            B = (self.prev_s, self.prev_s_dot)
+            C = path[i-1]
+            D = path[i]
+            if self.intersect(A, B, C, D):
+                self.forward_path = self.forward_path[0:i]
+                return True
+            
         return None
     
+    def ccw(self, A,B,C):
+                return (C[1]-A[1]) * (B[0]-A[0]) > (B[1]-A[1]) * (C[0]-A[0])
+
+    # Return true if line segments AB and CD intersect
+    def intersect(self, A,B,C,D):
+        return self.ccw(A,C,D) != self.ccw(B,C,D) and self.ccw(A,B,C) != self.ccw(A,B,D)
+
     # pt1 = (s1, s_dot1), pt2 = (s1, s_dot2)
     def calc_a_b_c(self, pt1, pt2):
         s1, s_dot1 = pt1
@@ -270,6 +286,22 @@ class Trajectory:
         # plot backward path
         s, s_dot_max = list(zip(*self.backward_path))
         self.axs[1, 1].scatter(s, s_dot_max, s=2)   
+
+    
+    def plot_intersection_points(self):
+        # plot intersection pts
+        print(len(self.intersection_pts))
+        for i in range(1, 20):
+            self.fig, self.axs = plt.subplots(2, 2, figsize=(10, 8))
+            self.plot_limit_curve()
+            self.plot_path()
+            self.plot_inflection_pts()
+            lower_bound = int((i-1) * len(self.intersection_pts)/20)
+            upper_bound = int(i * len(self.intersection_pts)/20)
+            s, s_dot_max = list(zip(*self.intersection_pts[lower_bound:upper_bound]))
+            print(lower_bound, upper_bound)
+            self.axs[1, 1].scatter(s, s_dot_max, s=2)
+            plt.show()
 
     def plot_inflection_pts(self):
         # plot inflection pts

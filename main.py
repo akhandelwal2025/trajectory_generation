@@ -11,6 +11,7 @@ def main():
     traj.plot_limit_curve()
     traj.plot_path()
     traj.plot_inflection_pts()
+    # traj.plot_intersection_points()
     plt.tight_layout()
     plt.show()
 

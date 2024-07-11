@@ -295,16 +295,38 @@ class Trajectory:
     # take waypoints for each joint (i.e. joint angles) and convert them into a continuous path for the joint to follow
     # class JointPath generates piece-wise function that dictates the path of each joint through s-space
     def generate_joint_paths(self):
+        # all_joints = list(zip(*self.waypoints)) # groups all joint positions together
+        # assert(len(all_joints) == len(self.vel_constraints) == len(self.accel_constraints))
+        # joint_paths = []
+        # for i in range(len(all_joints)):
+        #     joint_i_positions = all_joints[i]
+        #     joint_i_vel_constraint = self.vel_constraints[i]
+        #     joint_i_accel_constraint = self.accel_constraints[i]
+        #     joint_paths.append(JointPath(joint_i_positions, joint_i_vel_constraint, joint_i_accel_constraint))
+        # return joint_paths
         all_joints = list(zip(*self.waypoints)) # groups all joint positions together
         assert(len(all_joints) == len(self.vel_constraints) == len(self.accel_constraints))
         joint_paths = []
-        for i in range(len(all_joints)):
-            joint_i_positions = all_joints[i]
-            joint_i_vel_constraint = self.vel_constraints[i]
-            joint_i_accel_constraint = self.accel_constraints[i]
-            joint_paths.append(JointPath(joint_i_positions, joint_i_vel_constraint, joint_i_accel_constraint))
+
+        # joint 0 - stationary, linear
+        joint_0_pos = all_joints[0]
+        joint_0_vel = self.vel_constraints[0]
+        joint_0_accel = self.accel_constraints[0]
+        joint_paths.append(JointPath(joint_0_pos, joint_0_vel, joint_0_accel, parabolic=False))
+
+        # joint 1 - stationary, linear
+        joint_1_pos = all_joints[1]
+        joint_1_vel = self.vel_constraints[1]
+        joint_1_accel = self.accel_constraints[1]
+        joint_paths.append(JointPath(joint_1_pos, joint_1_vel, joint_1_accel, parabolic=False))
+
+        # joint 2 - parabolic
+        joint_2_pos = all_joints[2]
+        joint_2_vel = self.vel_constraints[2]
+        joint_2_accel = self.accel_constraints[2]
+        joint_paths.append(JointPath(joint_2_pos, joint_2_vel, joint_2_accel, parabolic=True))
         return joint_paths
-    
+
     # implementing eqn 22
     # technically should be a function of s-dot however since path is not second-order differentiable
     # f-prime2(s) is always 0 so that term goes to zero. thus this is just a function of s

@@ -33,20 +33,6 @@ class JointPath:
         self.q_dot2_max = accel_constraint
 
         self.segments = self.construct_linear_segments()
-        # self.segments, self.segment_start_s = self.add_parabolic_blends()
-    
-    """
-        - for each pair of consecutive segments, first identify if a blend is needed by checking if slopes are different
-        - if blend needed, then follow algorithm laid out in paper or moveit library: https://github.com/moveit/moveit/blob/master/moveit_core/trajectory_processing/src/time_optimal_trajectory_generation.cpp#L97
-    """
-    # def construct_parabolic_segments(self):
-    #     for i in range(0, len(self.linear_segments)):
-    #         seg1, seg2 = self.linear_segments[i], self.linear_segments[i+1]
-    #         intersection_s = self.linear_starts[i+1]
-    #         if seg1.m != seg2.m:
-                
-    # def add_parabolic_blends(self, seg1: LinearJointSegment, seg2: LinearJointSegment):
-    #     start_dir = 
 
     def construct_linear_segments(self):
         start = (0, 0) # (s, theta)
@@ -57,17 +43,6 @@ class JointPath:
             segments.append(LinearJointSegment(start, end))
             start = end
         return segments
-        # start_pos = 0
-        # linear_segments = [] # list of LinearJointSegment
-        # linear_starts = [] # starting s of each LinearJointSegment
-        # for i, end_pos in enumerate(self.joint_positions):
-        #     m = (end_pos - start_pos)/self.s_interval
-        #     offset = i * self.s_interval
-        #     b = start_pos
-        #     linear_segments.append(LinearJointSegment(m, offset, b))
-        #     linear_starts.append(i * self.s_interval)
-        #     start_pos = end_pos
-        # return linear_segments, linear_starts
     
     def f(self, s):
         if s == 1:

@@ -31,7 +31,12 @@ class ParabolicJointSegment:
         self.intersection = np.array(list(intersection))
         self.end = np.array(list(end))
         self.a, self.c = self.generate_parabola()
+
+        # record some important info for use in f(s), f_prime(s), f_prime2(s)
         self.start_s = self.I1[0]
+        self.start_s_prime = self.I1_prime[0]
+        self.end_s = self.I2[0]
+        self.end_s_prime = self.I2_prime[0]
     
     def intersection_two_segs(self, seg1_m, seg1_b, seg2_m, seg2_b):
         a = np.array([
@@ -101,6 +106,24 @@ class ParabolicJointSegment:
         a = I1_prime_m / (2 * self.I1_prime[0])
         c = self.I1_prime[1] - (a * (self.I1_prime[0] ** 2))
         return a, c
+
+    """
+        given: s -> [s1, s2] | output: x -> [x1, x2]
+        linear mapping formula: x1 + ((s - s1)/(s2 - s1) * (x2 - x1)) 
+    """
+    def map_s_to_x_prime(self, s, x1, x2, s1, s2):
+        return x1 + ((s-s1)/(s2-s1) * (x2-x1))
+    
+    def f(self, s):
+        x = self.map_s_to_x_prime(s, self.start_s_prime, self.end_s_prime, self.start_s, self.end_s)
+        return self.a * (x ** 2) + self.c
+    
+    def f_prime(self, s):
+        x = self.map_s_to_x_prime(s, self.start_s_prime, self.end_s_prime, self.start_s, self.end_s)
+        return 2 * self.a * x
+    
+    def f_prime2(self, s):
+        return 2 * self.a
     
 class JointPath:
     def __init__(self, joint_positions, vel_constraint, accel_constraint):
@@ -152,31 +175,23 @@ class JointPath:
     def f(self, s):
         if s == 1:
             return self.segments[-1].f(s)
-
-        segment_idx = math.floor(s/self.s_interval)
-        return self.segments[segment_idx].f(s)
+        seg_idx = 0
+        while s <= self.starting_s[seg_idx]:
+            seg_idx += 1
+        return self.segments[seg_idx].f(s)
 
     def f_prime(self, s):
-        if s == 0:
-            return self.segments[0].f_prime(s)
         if s == 1:
             return self.segments[-1].f_prime(s)
-        
-        # since joint paths are implemented as linear segments, the path is fully continuous, but not differentiable at the s_intervals
-        # need to handle these cases separately
-        if s % self.s_interval == 0:
-            inflection_idx = int(s/self.s_interval)
-            seg1_m = self.segments[inflection_idx-1].f_prime(s)
-            seg2_m = self.segments[inflection_idx].f_prime(s)
-            # if the sign of the slope of consecutive segments changes, then s-dot should be 0
-            if math.copysign(1, seg1_m) != math.copysign(1, seg2_m):     
-                return 0
-            else:
-                return (seg1_m + seg2_m)/2 # TODO: average of two slopes. should this be changed? 
-        else:
-            segment_idx = math.floor(s/self.s_interval)
-            return self.segments[segment_idx].f_prime(s)
+        seg_idx = 0
+        while s <= self.starting_s[seg_idx]:
+            seg_idx += 1
+        return self.segments[seg_idx].f_prime(s)
 
     def f_prime2(self, s):
-        segment_idx = math.floor(s/self.s_interval)
-        return self.segments[segment_idx].f_prime2(s)
+        if s == 1:
+            return self.segments[-1].f_prime2(s)
+        seg_idx = 0
+        while s <= self.starting_s[seg_idx]:
+            seg_idx += 1
+        return self.segments[seg_idx].f_prime2(s)

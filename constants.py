@@ -5,6 +5,7 @@ epsilon = 0.005 #s/sec
 
 inflection_epsilon = 0.001 # s
 discretization = 100
+blend_radius = 5 # deg
 # sandbox examples
 # waypoints = [
 #     [30, 20, 180],

@@ -326,13 +326,12 @@ class Trajectory:
 
     def plot_segments(self):
         for i, joint_path in enumerate(self.joint_paths):
-            s = np.linspace(0, 1, 500)[:-1]
+            print(joint_path.starting_s)
+            s = np.linspace(0, 1, 500)
             theta = [joint_path.f(i) for i in s]
 
             self.axs[1, 0].scatter(s, theta, s=2)
-            self.axs[1, 0].scatter(s, theta, s=2)
-            self.axs[1, 0].scatter(s, theta, s=2)
-    
+                
     def plot_output_positions(self, positions, times):
         for i in range(len(self.joint_paths)):
             joint_pos_waypoints = positions[:, i]

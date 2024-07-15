@@ -327,7 +327,7 @@ class Trajectory:
     def plot_segments(self):
         for i, joint_path in enumerate(self.joint_paths):
             print(joint_path.starting_s)
-            s = np.linspace(0, 1, 500)
+            s = np.linspace(0, 1, 50000)
             theta = [joint_path.f(i) for i in s]
 
             self.axs[1, 0].scatter(s, theta, s=2)

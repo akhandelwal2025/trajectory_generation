@@ -35,9 +35,9 @@ class ParabolicJointSegment:
 
         # record some important info for use in f(s), f_prime(s), f_prime2(s)
         self.start_s = self.I1[0]
-        self.start_s_prime = self.I1_prime[0]
+        self.start_x = self.I1_prime[0]
         self.end_s = self.I2[0]
-        self.end_s_prime = self.I2_prime[0]
+        self.end_x = self.I2_prime[0]
     
     def intersection_two_segs(self, seg1_m, seg1_b, seg2_m, seg2_b):
         a = np.array([
@@ -88,8 +88,6 @@ class ParabolicJointSegment:
         ])
         self.P_inv = np.linalg.inv(self.P)
 
-        
-       
         x_prime_m = x_prime_hat[1] / x_prime_hat[0]
         x_prime_b = (-x_prime_m * O[0]) + O[1]
 
@@ -114,47 +112,6 @@ class ParabolicJointSegment:
         a = I1_prime_m / (2 * self.I1_prime[0])
         c = self.I1_prime[1] - (a * (self.I1_prime[0] ** 2))
 
-        # """
-        #     PLOTTING STUFF
-        # """
-        # A = self.start
-        # B = self.intersection
-        # C = self.end
-        # plt.plot([A[0], B[0]], [A[1], B[1]])
-        # plt.plot([B[0], C[0]], [B[1], C[1]])
-        # print(A, B, C)
-        # # plot origin O of x_prime_hat, y_prime_hat space
-        # plt.scatter(O[0], O[1], s=4)
-
-        # # plot x_prime_hat, y_prime_hat axes
-        # y_prime_hat_pt = O + y_prime_hat
-        # # plt.plot([O[0], y_prime_hat_pt[0]], [O[1], y_prime_hat_pt[1]])
-
-        # x_prime_hat_pt = O + x_prime_hat
-        # # x_prime_hat_pt2 = O - x_prime_hat
-        # # plt.plot([O[0], x_prime_hat_pt[0]], [O[1], x_prime_hat_pt[1]])
-        # # plt.plot([O[0], x_prime_hat_pt2[0]], [O[1], x_prime_hat_pt2[1]])
-
-        # # plot parabola
-        # x_upper = np.sqrt(-c / a) + 0.1
-        # x_lower = -x_upper
-        # print(x_lower, x_upper)
-        # xs_prime = np.linspace(x_lower, x_upper, 500)
-        # print(xs_prime)
-        # ys_prime = [a*(x**2)+c for x in xs_prime]
-
-        # print(self.P_inv)
-        # xs = []
-        # ys = []
-        # for i in range(len(xs_prime)):
-        #     pt_homo = np.array([xs_prime[i], ys_prime[i], 1])
-        #     pt = np.matmul(self.P, pt_homo)[:2]
-        #     xs.append(pt[0])
-        #     ys.append(pt[1])
-        # plt.scatter(xs, ys, s=1)
-
-        # plt.scatter(self.I1[0], self.I1[1], s=25)
-        # plt.show()
         return a, c
 
     """
@@ -164,18 +121,48 @@ class ParabolicJointSegment:
     def map_s_to_x_prime(self, s, x1, x2, s1, s2):
         return x1 + ((s-s1)/(s2-s1) * (x2-x1))
     
+    def calc_proj_s_theta(self, x_proj):
+        y_proj = self.a * (x_proj ** 2) + self.c 
+        proj_pt = np.matmul(self.P, np.array([x_proj, y_proj, 1]))
+        return proj_pt[0], proj_pt[1]
+    
     def f(self, s):
-        x_prime = self.map_s_to_x_prime(s, self.start_s_prime, self.end_s_prime, self.start_s, self.end_s)
-        y_prime = self.a * (x_prime ** 2) + self.c
-        y_prime_homo = np.array([x_prime, y_prime, 1])
-        return np.matmul(self.P, y_prime_homo)[1]
+        # --------- IMPLEMENT BINARY SEARCH ---------
+        high = self.end_x
+        low = self.start_x
+        mid = (high + low)/2 
+        s_proj, theta_proj = self.calc_proj_s_theta(mid)
+        while abs(s - s_proj) > constants.s_epsilon:
+            if s > s_proj:
+                low = mid
+            else:
+                high = mid
+            mid = (high + low)/2
+            s_proj, theta_proj = self.calc_proj_s_theta(mid)
+        return theta_proj
+
+        # --------- TRANSFORMING S INTO X WITH PROJECTION MATRIX : DOESN'T WORK BECAUSE DON'T KNOW WHAT THE THETA-VALUE SHOULD BE OF THE (S, THETA) PAIR --------- 
+        # x = np.matmul(self.P_inv, np.array([s, 0, 1]))[0]
+        # y = self.a * (x ** 2) + self.c
+        # y_homo = np.array([x, y, 1])
+        # return np.matmul(self.P, y_homo)[1]
+    
+        # --------- ESTABLISHING LINEAR MAPPING FROM S -> X : DOESN'T WORK BECAUSE S -> X IS NOT A LINEAR MAPPING --------- 
+        # x_prime = self.map_s_to_x_prime(s, self.start_s_prime, self.end_s_prime, self.start_s, self.end_s)
+        # y_prime = self.a * (x_prime ** 2) + self.c
+        # y_prime_homo = np.array([x_prime, y_prime, 1])
+        # return np.matmul(self.P, y_prime_homo)[1]
     
     def f_prime(self, s):
-        x_prime = self.map_s_to_x_prime(s, self.start_s_prime, self.end_s_prime, self.start_s, self.end_s)
-        y_prime = 2 * self.a * x_prime
-        y_prime_homo = np.array([x_prime, y_prime, 1]) 
-        return np.matmul(self.P, y_prime_homo)[1]
-    
+        # TODO: THIS IS WRONG. NEED TO IMPLEMENT NUMERICAL METHOD
+        # find (s - epsilon, theta1) and (s + epsilon, theta2)
+        s1 = s - constants.parabolic_epsilon
+        theta1 = self.f(s1)
+        s2 = s + constants.parabolic_epsilon
+        theta2 = self.f(s2)
+
+        return (theta2-theta1)/(s2-s1) 
+
     def f_prime2(self, s):
         return 2 * self.a
     

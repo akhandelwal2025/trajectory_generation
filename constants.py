@@ -4,7 +4,9 @@ timestep = 0.01 #sec
 epsilon = 0.005 #s/sec
 
 inflection_epsilon = 0.001 # s
-discretization = 1
+parabolic_epsilon = 0.005 # s
+s_epsilon = 0.005 #s
+discretization = 500
 blend_radius = 10 # deg
 # sandbox examples
 # waypoints = [

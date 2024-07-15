@@ -51,7 +51,7 @@ class ParabolicJointSegment:
             pt_homo = np.array([x, y, 1])
             s_theta_pt = np.matmul(self.P, pt_homo)
             s_theta_pts.append((s_theta_pt[0], s_theta_pt[1]))
-        print(len(s_theta_pts))
+        # print(len(s_theta_pts))
         return s_theta_pts
     
     def intersection_two_segs(self, seg1_m, seg1_b, seg2_m, seg2_b):
@@ -203,7 +203,7 @@ class ParabolicJointSegment:
     
     def f_prime(self, s):
         # find (s - epsilon, theta1) and (s + epsilon, theta2)
-        print(s, self.start_s, self.end_s)
+        # print(s, self.start_s, self.end_s)
         s1 = max(self.start_s, s - constants.parabolic_epsilon)
         theta1 = self.f(s1)
         s2 = min(self.end_s, s + constants.parabolic_epsilon)

@@ -34,10 +34,25 @@ class ParabolicJointSegment:
         self.a, self.c = self.generate_parabola()
 
         # record some important info for use in f(s), f_prime(s), f_prime2(s)
-        self.start_s = self.I1[0]
-        self.start_x = self.I1_prime[0]
-        self.end_s = self.I2[0]
-        self.end_x = self.I2_prime[0]
+        self.start_s, self.start_theta = self.I1
+        self.start_x, self.start_y = self.I1_prime
+        self.end_s, self.end_theta = self.I2
+        self.end_x, self.end_y = self.I2_prime
+        
+        # sample a bunch of x-y values and project back to s-theta
+        self.s_theta_pts = self.sample_s_theta_pts()
+    
+    def sample_s_theta_pts(self):
+        x = np.linspace(self.start_x, self.end_x, constants.s_theta_sampling_frequency)
+        y = [self.a * (x_i ** 2) + self.c for x_i in x]
+        x_y_pts = list(zip(x, y))
+        s_theta_pts = []
+        for x, y in x_y_pts:
+            pt_homo = np.array([x, y, 1])
+            s_theta_pt = np.matmul(self.P, pt_homo)
+            s_theta_pts.append((s_theta_pt[0], s_theta_pt[1]))
+        print(len(s_theta_pts))
+        return s_theta_pts
     
     def intersection_two_segs(self, seg1_m, seg1_b, seg2_m, seg2_b):
         a = np.array([
@@ -73,7 +88,6 @@ class ParabolicJointSegment:
         BC_b = (-BC_m * self.intersection[0]) + self.intersection[1]
 
         # origin of (x_prime_hat, y_prime_hat) coordinate frame
-        print(f"slope: {BC_m - AB_m}")
         slope_diff = BC_m - AB_m
         d = constants.blend_radius
         if slope_diff == 120:
@@ -127,19 +141,53 @@ class ParabolicJointSegment:
         return proj_pt[0], proj_pt[1]
     
     def f(self, s):
-        # --------- IMPLEMENT BINARY SEARCH ---------
-        high = self.end_x
-        low = self.start_x
-        mid = (high + low)/2 
-        s_proj, theta_proj = self.calc_proj_s_theta(mid)
-        while abs(s - s_proj) > constants.s_epsilon:
-            if s > s_proj:
-                low = mid
+        # --------- IMPLEMENT RAYS HACKY SOLUTION ---------
+        # if s == 0:
+        #     return 0
+        # delta_x = math.sqrt(abs(s/self.a))
+        # x = self.start_x + delta_x
+        # y = self.a * (x ** 2) + self.c
+        # pt_homo = np.array([x, y, 1])
+        # theta = np.matmul(self.P, pt_homo)[1]
+        # return theta
+        # --------- IMPLEMENT BINARY SEARCH THROUGH ALR SAMPLED POINTS ---------
+        # print(s, self.start_s, self.end_s)
+        s_sampled, theta_sampled = -1, -1
+        high = len(self.s_theta_pts)-1
+        low = 0
+        while low <= high:
+            mid = int((high+low)/2)
+            s_sampled, theta_sampled = self.s_theta_pts[mid]  
+
+            if s < s_sampled:
+                high = mid-1
+            elif s > s_sampled:
+                low = mid+1
             else:
-                high = mid
-            mid = (high + low)/2
-            s_proj, theta_proj = self.calc_proj_s_theta(mid)
-        return theta_proj
+                return theta_sampled
+        # print(s, self.s_theta_pts[-1])
+        
+        
+        s_low, theta_low = self.s_theta_pts[high]
+        if high == len(self.s_theta_pts)-1:
+            s_high, theta_high = self.end_s, self.end_theta
+        else:
+            s_high, theta_high = self.s_theta_pts[high+1]
+        return self.map_s_to_x_prime(s, theta_low, theta_high, s_low, s_high)
+
+        # --------- IMPLEMENT BINARY SEARCH : KINDA WORKS, BUT NOT REALLY BECAUSE ITS NOT ABLE TO SOLVE AT HIGH FREQUENCY ---------
+        # high = self.end_x
+        # low = self.start_x
+        # mid = (high + low)/2 
+        # s_proj, theta_proj = self.calc_proj_s_theta(mid)
+        # while abs(s - s_proj) > constants.s_epsilon:
+        #     if s > s_proj:
+        #         low = mid
+        #     else:
+        #         high = mid
+        #     mid = (high + low)/2
+        #     s_proj, theta_proj = self.calc_proj_s_theta(mid)
+        # return theta_proj
 
         # --------- TRANSFORMING S INTO X WITH PROJECTION MATRIX : DOESN'T WORK BECAUSE DON'T KNOW WHAT THE THETA-VALUE SHOULD BE OF THE (S, THETA) PAIR --------- 
         # x = np.matmul(self.P_inv, np.array([s, 0, 1]))[0]
@@ -154,11 +202,11 @@ class ParabolicJointSegment:
         # return np.matmul(self.P, y_prime_homo)[1]
     
     def f_prime(self, s):
-        # TODO: THIS IS WRONG. NEED TO IMPLEMENT NUMERICAL METHOD
         # find (s - epsilon, theta1) and (s + epsilon, theta2)
-        s1 = s - constants.parabolic_epsilon
+        print(s, self.start_s, self.end_s)
+        s1 = max(self.start_s, s - constants.parabolic_epsilon)
         theta1 = self.f(s1)
-        s2 = s + constants.parabolic_epsilon
+        s2 = min(self.end_s, s + constants.parabolic_epsilon)
         theta2 = self.f(s2)
 
         return (theta2-theta1)/(s2-s1) 
@@ -177,28 +225,9 @@ class JointPath:
         self.q_dot2_max = accel_constraint
 
         self.linear_segments = self.construct_linear_segments()
-        self.segments, self.starting_s = self.construct_parabolas()
-
-        """
-            plot segments
-        """
-        # all_s = []
-        # all_theta = []
-        # print(self.starting_s)
-        # for i in range(len(self.segments)-1):
-        #     start_s = self.starting_s[i]
-        #     end_s = self.starting_s[i+1]
-        #     seg = self.segments[i]
-        #     s = np.linspace(start_s, end_s, 100)
-        #     theta = [seg.f(s_i) for s_i in s]
-        #     all_s.extend(s)
-        #     all_theta.extend(theta)
-        #     plt.scatter(all_s, all_theta, s=2)
-        #     # plt.scatter(s, theta, s=2)
-        #     plt.show()
+        self.segments = self.construct_parabolas()
 
     def construct_parabolas(self):
-        starting_s = []
         segments = []
         import pdb
         for i in range(len(self.linear_segments)-1):
@@ -208,7 +237,6 @@ class JointPath:
             # if consecutive segments have the same slope, no need for parabolic blend
             if seg1.m == seg2.m:
                 segments.append(seg1)
-                starting_s.append(seg1.start_s)
                 continue
             
             parabolic_seg = ParabolicJointSegment(seg1.start, seg1.end, seg2.end)
@@ -217,18 +245,13 @@ class JointPath:
             segments.append(seg1)
             segments.append(parabolic_seg)
 
-            # record the starting positions of each of the segments
-            starting_s.append(seg1.start_s)
-            starting_s.append(parabolic_seg.start_s)
-
             # set the starting point of the next linear segment to the intersection point with the parabola
             seg2.start = parabolic_seg.I2
             seg2.start_s = seg2.start[0]
 
         # add last remaining segment
         segments.append(self.linear_segments[-1])
-        starting_s.append(self.linear_segments[-1].start_s)
-        return segments, starting_s
+        return segments
 
     def construct_linear_segments(self):
         start = (0, 0) # (s, theta)

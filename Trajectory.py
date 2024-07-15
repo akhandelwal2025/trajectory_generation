@@ -70,7 +70,6 @@ class Trajectory:
 
         # step 3
         self.find_next_inflection_pt()
-        print(self.curr_s, self.curr_s_dot)
         while not self.done() and not self.find_path_collision(self.forward_path) and not self.find_limit_curve_collisions(forward=False):
             self.integrate_backward()
         
@@ -326,7 +325,6 @@ class Trajectory:
 
     def plot_segments(self):
         for i, joint_path in enumerate(self.joint_paths):
-            print(joint_path.starting_s)
             s = np.linspace(0, 1, 50000)
             theta = [joint_path.f(i) for i in s]
 
@@ -360,7 +358,6 @@ class Trajectory:
     
     def plot_intersection_points(self):
         # plot intersection pts
-        print(len(self.intersection_pts))
         for i in range(1, 20):
             self.fig, self.axs = plt.subplots(2, 2, figsize=(10, 8))
             self.plot_limit_curve()
@@ -369,7 +366,6 @@ class Trajectory:
             lower_bound = int((i-1) * len(self.intersection_pts)/20)
             upper_bound = int(i * len(self.intersection_pts)/20)
             s, s_dot_max = list(zip(*self.intersection_pts[lower_bound:upper_bound]))
-            print(lower_bound, upper_bound)
             self.axs[1, 1].scatter(s, s_dot_max, s=2)
             plt.show()
 

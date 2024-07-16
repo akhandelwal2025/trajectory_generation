@@ -42,7 +42,7 @@ class Trajectory:
         self.intersection_pts = []
 
         # matplotlib stuff
-        self.fig, self.axs = plt.subplots(2, 2, figsize=(10, 8))
+        self.fig, self.axs = plt.subplots(3, 2, figsize=(10, 8))
 
     """
         Definitions:
@@ -327,8 +327,9 @@ class Trajectory:
         for i, joint_path in enumerate(self.joint_paths):
             s = np.linspace(0, 1, 50000)
             theta = [joint_path.f(i) for i in s]
-
+            theta_prime = [joint_path.f_prime(i) for i in s]
             self.axs[1, 0].scatter(s, theta, s=2)
+            self.axs[1, 1].scatter(s, theta_prime, s=2)
                 
     def plot_output_positions(self, positions, times):
         for i in range(len(self.joint_paths)):
@@ -344,16 +345,16 @@ class Trajectory:
         # plot limit curve
         s = np.linspace(0, 1, 500)[:-1]
         s_dot_max = [self.limit_curve.evaluate(i) for i in s]
-        self.axs[1, 1].scatter(s, s_dot_max, s=2)
+        self.axs[2, 1].scatter(s, s_dot_max, s=2)
 
     def plot_path(self):
         # plot forward path
         s, s_dot_max, _ = list(zip(*self.forward_path))
-        self.axs[1, 1].scatter(s, s_dot_max, s=2)   
+        self.axs[2, 1].scatter(s, s_dot_max, s=2)   
 
         # plot backward path
         s, s_dot_max, _ = list(zip(*self.backward_path))
-        self.axs[1, 1].scatter(s, s_dot_max, s=2)   
+        self.axs[2, 1].scatter(s, s_dot_max, s=2)   
 
     
     def plot_intersection_points(self):
@@ -366,11 +367,11 @@ class Trajectory:
             lower_bound = int((i-1) * len(self.intersection_pts)/20)
             upper_bound = int(i * len(self.intersection_pts)/20)
             s, s_dot_max = list(zip(*self.intersection_pts[lower_bound:upper_bound]))
-            self.axs[1, 1].scatter(s, s_dot_max, s=2)
+            self.axs[2, 1].scatter(s, s_dot_max, s=2)
             plt.show()
 
     def plot_inflection_pts(self):
         # plot inflection pts
         s, s_dot_max = list(zip(*self.inflection_pts))
-        self.axs[1, 1].scatter(s, s_dot_max, color='red', s=8)   
+        self.axs[2, 1].scatter(s, s_dot_max, color='red', s=8)   
  

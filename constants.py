@@ -6,7 +6,7 @@ epsilon = 0.005 #s/sec
 inflection_epsilon = 0.001 # s
 parabolic_epsilon = 0.00001 # s
 s_theta_sampling_frequency = 5000 # num_pts
-discretization = 1
+discretization = 1000
 blend_radius = 10 # deg
 # sandbox examples
 # waypoints = [
@@ -38,5 +38,5 @@ waypoints = [
 #     [0, 0, 0],
 # ] # deg
 
-velocity_constraints = [180, 180, 180] # deg/s
-accel_constraints = [20, 20, 20] # deg^2/s
+velocity_constraints = [80, 80, 80] # deg/s
+accel_constraints = [5, 5, 5] # deg^2/s

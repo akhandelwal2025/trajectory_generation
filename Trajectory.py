@@ -20,8 +20,11 @@ class Trajectory:
         self.accel_constraints = accel_constraints
         self.joint_paths = self.generate_joint_paths()
         
-        self.limit_curve = LimitCurve(self.joint_paths)
-        self.inflection_pts = self.limit_curve.find_inflection_points()
+        self.vel_limit_curve = VelocityLimitCurve(self.joint_paths)
+        self.accel_limit_curve = AccelerationLimitCurve(self.joint_paths)
+
+        # self.limit_curve = LimitCurve(self.joint_paths)
+        # self.inflection_pts = self.limit_curve.find_inflection_points()
 
         # prev timestep - used for collision-checking
         self.prev_s = 0
@@ -65,13 +68,26 @@ class Trajectory:
     """
     def generate_trajectory(self):
         # step 2
-        while not self.done() and not self.find_limit_curve_collisions(forward=True):
+        while not self.done() and \
+              not self.find_limit_curve_collisions(accel=False, forward=True) and \
+              not self.find_limit_curve_collisions(accel=True, forward=True):
+            print(self.curr_s, self.curr_s_dot)
             self.integrate_forward()
+            print(self.curr_s, self.curr_s_dot)
 
         # step 3
-        self.find_next_inflection_pt()
-        while not self.done() and not self.find_path_collision(self.forward_path) and not self.find_limit_curve_collisions(forward=False):
+        # self.find_next_inflection_pt()
+        # for now hardcoding this, cuz I know the inflection point is s = 0.5
+        self.curr_s = 0.5
+        self.curr_s_dot = self.accel_limit_curve.evaluate(self.curr_s) - 0.006
+
+        while not self.done() and \
+              not self.find_path_collision(self.forward_path) and \
+              not self.find_limit_curve_collisions(accel=False, forward=False):
+            print(" ----------- INTEGRATE BACKWARD -----------")
+            print(self.curr_s, self.curr_s_dot)
             self.integrate_backward()
+            print(self.curr_s, self.curr_s_dot)
         
         # self.backward_path is in reverse right now. it goes from inflection point to collision point. need to reverse this so that it goes from collision point to inflectio point
         self.backward_path = self.backward_path[::-1]
@@ -81,10 +97,48 @@ class Trajectory:
 
         # append forward and backward path into a single final path
         self.final_path = self.forward_path + self.backward_path
+        # self.plot_path()
+        # plt.show()
+        # ------------- SECOND HALF -----------
+        self.forward_path = []
+        self.backward_path = []
+        self.curr_s, self.curr_s_dot, self.curr_time = self.final_path[-1]
+
+        while not self.done() and \
+              not self.find_limit_curve_collisions(accel=False, forward=True):
+            print(self.curr_s, self.curr_s_dot)
+            self.integrate_forward()
+            print(self.curr_s, self.curr_s_dot)
+
+        # step 3
+        # self.find_next_inflection_pt()
+        # for now hardcoding this, cuz I know the inflection point is s = 0.5
+        self.curr_s = 1
+        self.curr_s_dot = 0
+
+        while not self.done() and \
+            not self.find_path_collision(self.forward_path) and \
+            not self.find_limit_curve_collisions(accel=False, forward=False):
+            print(" ----------- INTEGRATE BACKWARD -----------")
+            print(self.curr_s, self.curr_s_dot)
+            self.integrate_backward()
+            print(self.curr_s, self.curr_s_dot)
+        
+        # self.backward_path is in reverse right now. it goes from inflection point to collision point. need to reverse this so that it goes from collision point to inflectio point
+        self.backward_path = self.backward_path[::-1]
+
+        # fix backward path timestamps
+        self.fix_back_path_timestamps()
+
+        # append forward and backward path into a single final path
+        self.final_path.extend(self.forward_path)
+        self.final_path.extend(self.backward_path)
 
         # extract (position, velocity, time) for all s_interval + switching points
         self.output_trajectory()
-    
+
+        
+
     def output_trajectory(self):
         s_interval = 1/len(self.waypoints)/constants.discretization
         all_waypoint_s = np.arange(s_interval, 1+s_interval, s_interval) # produces list of [s_interval, 2*s_interval, ... , 1]
@@ -220,8 +274,12 @@ class Trajectory:
             b. s_dot > limit_curve(s) && abs(s_dot - limit_curve(s)) > epsilon
                 i. need to go backward to find a precise collision point
     """
-    def find_limit_curve_collisions(self, forward):
-        lim_curve_s_dot = self.limit_curve.evaluate(self.curr_s)
+    def find_limit_curve_collisions(self, accel, forward):
+        if accel:
+            lim_curve_s_dot = self.accel_limit_curve.evaluate(self.curr_s)
+        else:
+            lim_curve_s_dot = self.vel_limit_curve.evaluate(self.curr_s)
+
         if self.curr_s_dot < lim_curve_s_dot and (lim_curve_s_dot - self.curr_s_dot) > constants.epsilon:
             if forward:
                 self.forward_path.append((self.curr_s, self.curr_s_dot, self.curr_time))
@@ -243,18 +301,22 @@ class Trajectory:
         while self.curr_s_dot > lim_curve_s_dot and abs(lim_curve_s_dot - self.curr_s_dot) > constants.epsilon: 
             timestep = (lower_timestep + upper_timestep) / 2
             if forward:
-                max_s_dot2 = self.calc_max_s_dot2(self.prev_s)
+                max_s_dot2 = self.calc_max_s_dot2(self.prev_s, self.prev_s_dot)
                 self.curr_s_dot = self.prev_s_dot + max_s_dot2 * timestep # v_final = v_initial + a*delta_t
                 self.curr_s = self.prev_s + (self.prev_s_dot * timestep) + (0.5 * max_s_dot2 * (timestep ** 2))# s_final = s_initial + v_initial*delta_t + 1/2*a*delta_t^2 
                 self.curr_time = self.prev_time + timestep
             else:
-                min_s_dot2 = self.calc_min_s_dot2(self.prev_s)
+                min_s_dot2 = self.calc_min_s_dot2(self.prev_s, self.prev_s_dot)
                 self.curr_s_dot = self.prev_s_dot - min_s_dot2 * timestep # v_final = v_initial + a*delta_t
                 self.curr_s = self.prev_s - (self.prev_s_dot * timestep) + (0.5 * min_s_dot2 * (timestep ** 2)) # s_final = s_initial + v_initial*delta_t + 1/2*a*delta_t^2 
                 self.curr_time = self.prev_time - timestep
 
             # if resulting s_dot is above lim_curve_s_dot, then set upper_timestep = timestep
-            lim_curve_s_dot = self.limit_curve.evaluate(self.curr_s)
+            if accel:
+                lim_curve_s_dot = self.accel_limit_curve.evaluate(self.curr_s)
+            else:
+                lim_curve_s_dot = self.vel_limit_curve.evaluate(self.curr_s)
+
             if self.curr_s_dot > lim_curve_s_dot:
                 upper_timestep = timestep
             else:
@@ -271,7 +333,7 @@ class Trajectory:
         self.prev_s_dot = self.curr_s_dot
         self.prev_time = self.curr_time
 
-        min_s_dot2 = self.calc_min_s_dot2(self.prev_s)
+        min_s_dot2 = self.calc_min_s_dot2(self.prev_s, self.prev_s_dot)
         self.curr_s_dot = self.prev_s_dot - min_s_dot2 * constants.timestep # v_final = v_initial + a*delta_t
         self.curr_s = self.prev_s - (self.prev_s_dot * constants.timestep) + (0.5 * min_s_dot2 * (constants.timestep ** 2)) # s_final = s_initial + v_initial*delta_t + 1/2*a*delta_t^2 
         self.curr_time = self.prev_time - constants.timestep
@@ -282,7 +344,8 @@ class Trajectory:
         self.prev_s_dot = self.curr_s_dot
         self.prev_time = self.curr_time
 
-        max_s_dot2 = self.calc_max_s_dot2(self.prev_s)
+        max_s_dot2 = self.calc_max_s_dot2(self.prev_s, self.prev_s_dot)
+        print(max_s_dot2)
         self.curr_s_dot = self.prev_s_dot + max_s_dot2 * constants.timestep # v_final = v_initial + a*delta_t
         self.curr_s = self.prev_s + (self.prev_s_dot * constants.timestep) + (0.5 * max_s_dot2 * (constants.timestep ** 2)) # s_final = s_initial + v_initial*delta_t + 1/2*a*delta_t^2 
         self.curr_time = self.prev_time + constants.timestep
@@ -305,22 +368,23 @@ class Trajectory:
         return joint_paths
     
     # implementing eqn 22
-    # technically should be a function of s-dot however since path is not second-order differentiable
-    # f-prime2(s) is always 0 so that term goes to zero. thus this is just a function of s
-    def calc_min_s_dot2(self, s):
+    def calc_min_s_dot2(self, s, s_dot):
         min_s_dot2 = float('-inf')
         for joint_i in self.joint_paths:
-            if joint_i.f_prime(s) != 0:
-                min_s_dot2 = max(min_s_dot2, (-1*joint_i.q_dot2_max)/abs(joint_i.f_prime(s)))
+            f_prime_s = joint_i.f_prime(s)
+            f_prime2_s = joint_i.f_prime2(s)
+            if f_prime_s != 0:
+                min_s_dot2 = max(min_s_dot2, (-joint_i.q_dot2_max/abs(f_prime_s)) - ((f_prime2_s*(s_dot ** 2))/f_prime_s))
         return min_s_dot2
 
     # implementing eqn 23
-    # same note as previous function - technically should be function of s-dot
-    def calc_max_s_dot2(self, s):
+    def calc_max_s_dot2(self, s, s_dot):
         max_s_dot2 = float('inf')
         for joint_i in self.joint_paths:
-            if joint_i.f_prime(s) != 0:
-                max_s_dot2 = min(max_s_dot2, joint_i.q_dot2_max/abs(joint_i.f_prime(s)))
+            f_prime_s = joint_i.f_prime(s)
+            f_prime2_s = joint_i.f_prime2(s)
+            if f_prime_s != 0:
+                max_s_dot2 = min(max_s_dot2, (joint_i.q_dot2_max/abs(f_prime_s)) - ((f_prime2_s*(s_dot ** 2))/f_prime_s))
         return max_s_dot2
 
     def plot_segments(self):
@@ -344,17 +408,23 @@ class Trajectory:
     def plot_limit_curve(self):
         # plot limit curve
         s = np.linspace(0, 1, 500)[:-1]
-        s_dot_max = [self.limit_curve.evaluate(i) for i in s]
-        self.axs[2, 1].scatter(s, s_dot_max, s=2)
+        s_dot_max_vel = [self.vel_limit_curve.evaluate(i) for i in s]
+        s_dot_max_accel = [self.accel_limit_curve.evaluate(i) for i in s]
+        self.axs[2, 1].scatter(s, s_dot_max_vel, s=2)
+        self.axs[2, 1].scatter(s, s_dot_max_accel, s=2)
+        self.axs[2, 1].set_xlim(0, 1)
+        self.axs[2, 1].set_ylim(0, 0.25)
 
     def plot_path(self):
-        # plot forward path
-        s, s_dot_max, _ = list(zip(*self.forward_path))
-        self.axs[2, 1].scatter(s, s_dot_max, s=2)   
+        s, s_dot_max, _ = list(zip(*self.final_path))
+        self.axs[2, 1].scatter(s, s_dot_max, s=2)
+        # # plot forward path
+        # s, s_dot_max, _ = list(zip(*self.forward_path))
+        # self.axs[2, 1].scatter(s, s_dot_max, s=2)   
 
-        # plot backward path
-        s, s_dot_max, _ = list(zip(*self.backward_path))
-        self.axs[2, 1].scatter(s, s_dot_max, s=2)   
+        # # plot backward path
+        # s, s_dot_max, _ = list(zip(*self.backward_path))
+        # self.axs[2, 1].scatter(s, s_dot_max, s=2)   
 
     
     def plot_intersection_points(self):

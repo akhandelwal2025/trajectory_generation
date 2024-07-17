@@ -38,5 +38,5 @@ waypoints = [
 #     [0, 0, 0],
 # ] # deg
 
-velocity_constraints = [80, 80, 80] # deg/s
-accel_constraints = [5, 5, 5] # deg^2/s
+velocity_constraints = [180, 180, 180] # deg/s
+accel_constraints = [50, 50, 50] # deg^2/s

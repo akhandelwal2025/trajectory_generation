@@ -45,7 +45,7 @@ class Trajectory:
         self.intersection_pts = []
 
         # matplotlib stuff
-        self.fig, self.axs = plt.subplots(3, 2, figsize=(10, 8))
+        self.fig, self.axs = plt.subplots(3, 2, figsize=(20, 8))
 
     """
         Definitions:
@@ -71,77 +71,24 @@ class Trajectory:
         while not self.done() and \
               not self.find_limit_curve_collisions(accel=False, forward=True) and \
               not self.find_limit_curve_collisions(accel=True, forward=True):
-            print(self.curr_s, self.curr_s_dot)
             self.integrate_forward()
-            print(self.curr_s, self.curr_s_dot)
-
-        # step 3
-        # self.find_next_inflection_pt()
-        # for now hardcoding this, cuz I know the inflection point is s = 0.5
-        self.curr_s = 0.5
-        self.curr_s_dot = self.accel_limit_curve.evaluate(self.curr_s) - 0.006
-
+        print(self.forward_path[-2])
+        self.curr_s, self.curr_s_dot, _ = self.forward_path[-3]
         while not self.done() and \
-              not self.find_path_collision(self.forward_path) and \
-              not self.find_limit_curve_collisions(accel=False, forward=False):
-            print(" ----------- INTEGRATE BACKWARD -----------")
+              not self.find_limit_curve_collisions(accel=False, forward=False) and \
+              not self.find_limit_curve_collisions(accel=True, forward=False) and \
+              not self.curr_s == 0:
             print(self.curr_s, self.curr_s_dot)
             self.integrate_backward()
-            print(self.curr_s, self.curr_s_dot)
-        
-        # self.backward_path is in reverse right now. it goes from inflection point to collision point. need to reverse this so that it goes from collision point to inflectio point
-        self.backward_path = self.backward_path[::-1]
-
-        # fix backward path timestamps
-        self.fix_back_path_timestamps()
-
-        # append forward and backward path into a single final path
-        self.final_path = self.forward_path + self.backward_path
-        # self.plot_path()
-        # plt.show()
-        # ------------- SECOND HALF -----------
-        self.forward_path = []
-        self.backward_path = []
-        self.curr_s, self.curr_s_dot, self.curr_time = self.final_path[-1]
-
-        while not self.done() and \
-              not self.find_limit_curve_collisions(accel=False, forward=True):
-            print(self.curr_s, self.curr_s_dot)
-            self.integrate_forward()
-            print(self.curr_s, self.curr_s_dot)
-
-        # step 3
-        # self.find_next_inflection_pt()
-        # for now hardcoding this, cuz I know the inflection point is s = 0.5
-        self.curr_s = 1
-        self.curr_s_dot = 0
-
-        while not self.done() and \
-            not self.find_path_collision(self.forward_path) and \
-            not self.find_limit_curve_collisions(accel=False, forward=False):
-            print(" ----------- INTEGRATE BACKWARD -----------")
-            print(self.curr_s, self.curr_s_dot)
-            self.integrate_backward()
-            print(self.curr_s, self.curr_s_dot)
-        
-        # self.backward_path is in reverse right now. it goes from inflection point to collision point. need to reverse this so that it goes from collision point to inflectio point
-        self.backward_path = self.backward_path[::-1]
-
-        # fix backward path timestamps
-        self.fix_back_path_timestamps()
-
-        # append forward and backward path into a single final path
-        self.final_path.extend(self.forward_path)
-        self.final_path.extend(self.backward_path)
 
         # extract (position, velocity, time) for all s_interval + switching points
-        self.output_trajectory()
-
-        
+        self.final_path = self.forward_path
+        # self.output_trajectory()
 
     def output_trajectory(self):
         s_interval = 1/len(self.waypoints)/constants.discretization
-        all_waypoint_s = np.arange(s_interval, 1+s_interval, s_interval) # produces list of [s_interval, 2*s_interval, ... , 1]
+        all_waypoint_s = np.arange(s_interval, 1.000000001, s_interval) # produces list of [s_interval, 2*s_interval, ... , 1]
+        print(all_waypoint_s)
         num_waypoints = len(all_waypoint_s)
         num_joints = len(self.joint_paths)
         positions = np.empty((num_waypoints, num_joints))
@@ -163,6 +110,7 @@ class Trajectory:
         
         self.plot_output_positions(positions, times)
         self.plot_velocity(velocities, times)
+        np.set_printoptions(precision=3, suppress=False, floatmode='fixed')
         print(positions)
         print(velocities)
         print(times)
@@ -394,7 +342,11 @@ class Trajectory:
             theta_prime = [joint_path.f_prime(i) for i in s]
             self.axs[1, 0].scatter(s, theta, s=2)
             self.axs[1, 1].scatter(s, theta_prime, s=2)
-                
+            # self.axs[1, 0].set_xlim(0, 1)
+            # self.axs[1, 0].set_ylim(-180, 180)
+            # self.axs[1, 1].set_xlim(0, 1)
+            # self.axs[1, 1].set_ylim(-180, 180)
+            
     def plot_output_positions(self, positions, times):
         for i in range(len(self.joint_paths)):
             joint_pos_waypoints = positions[:, i]
@@ -413,19 +365,21 @@ class Trajectory:
         self.axs[2, 1].scatter(s, s_dot_max_vel, s=2)
         self.axs[2, 1].scatter(s, s_dot_max_accel, s=2)
         self.axs[2, 1].set_xlim(0, 1)
-        self.axs[2, 1].set_ylim(0, 0.25)
+        self.axs[2, 1].set_ylim(0, 1)
+
+    def plot_forward_path(self):
+        # plot forward path
+        s, s_dot_max, _ = list(zip(*self.forward_path))
+        self.axs[2, 1].scatter(s, s_dot_max, s=2)   
+    
+    def plot_backward_path(self):
+        # plot backward path
+        s, s_dot_max, _ = list(zip(*self.backward_path))
+        self.axs[2, 1].scatter(s, s_dot_max, s=2)   
 
     def plot_path(self):
         s, s_dot_max, _ = list(zip(*self.final_path))
         self.axs[2, 1].scatter(s, s_dot_max, s=2)
-        # # plot forward path
-        # s, s_dot_max, _ = list(zip(*self.forward_path))
-        # self.axs[2, 1].scatter(s, s_dot_max, s=2)   
-
-        # # plot backward path
-        # s, s_dot_max, _ = list(zip(*self.backward_path))
-        # self.axs[2, 1].scatter(s, s_dot_max, s=2)   
-
     
     def plot_intersection_points(self):
         # plot intersection pts

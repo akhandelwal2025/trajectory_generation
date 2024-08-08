@@ -75,6 +75,36 @@ class ParabolicJointSegment:
         bisect = (unit_BA + unit_BC)/2
         unit_bisect = bisect / np.linalg.norm(bisect)
 
+        """
+            find O - origin of the new frames
+            1. find points at center of segment AB, BC (center_BA, center_BC)
+            2. construct line segment between center_BA, center_BC
+            3. find where this intersects bisecting vector segment - this is O
+        """
+        center_BA = (self.start + self.intersection)/2
+        center_BC = (self.intersection + self.end)/2
+
+        center_m = (center_BC[1] - center_BA[1]) / (center_BC[0] - center_BA[0])
+        center_b = (-center_m * center_BA[0]) + center_BA[1]
+
+        bisect_m = unit_bisect[1]/unit_bisect[0]
+        bisect_b = (-bisect_m * self.intersection[0]) + self.intersection[1]
+
+        if bisect_m == float('inf') or bisect_m == float('-inf'):
+            x = self.intersection[0]
+            y = center_m * x + center_b
+            O = (x, y)
+        else:
+            O = self.intersection_two_segs(center_m, center_b, bisect_m, bisect_b)
+        # plt.plot([self.start[0], self.intersection[0]], [self.start[1], self.intersection[1]])
+        # plt.plot([self.intersection[0], self.end[0]], [self.intersection[1], self.end[1]])
+        # plt.plot([self.intersection[0], self.intersection[0] + unit_bisect[0]], [self.intersection[1], self.intersection[1] + unit_bisect[1]])
+        # plt.scatter(center_BA[0], center_BA[1])
+        # plt.scatter(center_BC[0], center_BC[1])
+        # plt.scatter(O[0], O[1])
+        # plt.xlim(0, 1)
+        # plt.ylim(0, 180)
+        # plt.show()
         # new frame axes
         y_prime_hat = -1 * unit_bisect
         x_prime_hat = np.array([-unit_bisect[1], unit_bisect[0]])
@@ -87,12 +117,11 @@ class ParabolicJointSegment:
         BC_m = (self.end[1]-self.intersection[1])/(self.end[0]-self.intersection[0])
         BC_b = (-BC_m * self.intersection[0]) + self.intersection[1]
 
-        # origin of (x_prime_hat, y_prime_hat) coordinate frame
-        slope_diff = BC_m - AB_m
-        d = constants.blend_radius
-        if slope_diff == 120:
-            d = 0.05
-        O = self.intersection + d*unit_bisect
+        x_prime_m = x_prime_hat[1] / x_prime_hat[0]
+        x_prime_b = (-x_prime_m * O[0]) + O[1]
+
+        self.I1 = self.intersection_two_segs(AB_m, AB_b, x_prime_m, x_prime_b)
+        self.I2 = self.intersection_two_segs(BC_m, BC_b, x_prime_m, x_prime_b)
 
         # projection matrix - (x_hat, y_hat) -> (x_prime_hat, y_prime_hat)
         self.P = np.array([
@@ -101,12 +130,6 @@ class ParabolicJointSegment:
             [0, 0, 1]
         ])
         self.P_inv = np.linalg.inv(self.P)
-
-        x_prime_m = x_prime_hat[1] / x_prime_hat[0]
-        x_prime_b = (-x_prime_m * O[0]) + O[1]
-
-        self.I1 = self.intersection_two_segs(AB_m, AB_b, x_prime_m, x_prime_b)
-        self.I2 = self.intersection_two_segs(BC_m, BC_b, x_prime_m, x_prime_b)
 
         # transform I1 into the x_prime_hat, y_prime_hat space
         I1_homo = np.array([self.I1[0], self.I1[1], 1])

@@ -22,9 +22,7 @@ class Trajectory:
         
         self.vel_limit_curve = VelocityLimitCurve(self.joint_paths)
         self.accel_limit_curve = AccelerationLimitCurve(self.joint_paths)
-
-        # self.limit_curve = LimitCurve(self.joint_paths)
-        # self.inflection_pts = self.limit_curve.find_inflection_points()
+        self.accel_limit_curve.find_inflection_pts()
 
         # prev timestep - used for collision-checking
         self.prev_s = 0
@@ -42,6 +40,7 @@ class Trajectory:
         # store (s, s_dot, time) pairs for viz purposes
         self.forward_path = []
         self.backward_path = []
+        self.final_path = []
         self.intersection_pts = []
 
         # matplotlib stuff
@@ -73,17 +72,88 @@ class Trajectory:
               not self.find_limit_curve_collisions(limit_curve=self.vel_limit_curve, accel=accel, forward=True) and \
               not self.find_limit_curve_collisions(limit_curve=self.accel_limit_curve, accel=accel, forward=True):
             self.forward_path.append((self.curr_s, self.curr_s_dot, self.curr_time))
-            self.integrate_forward()
+            accel = self.calc_max_s_dot2(self.prev_s, self.prev_s_dot)
+            self.integrate_forward(accel)
+        self.forward_path.append((self.curr_s, self.curr_s_dot, self.curr_time))
         
-        accel = self.calc_min_s_dot2(self.prev_s, self.prev_s_dot)
-        while not self.done() and \
-              not self.find_limit_curve_collisions(accel=False, forward=False) and \
-              not self.find_limit_curve_collisions(accel=True, forward=False) and \
-              not self.curr_s == 0:
-            self.integrate_backward()
+        while not self.done():
+            print(self.curr_s, self.curr_s_dot)
+            self.store_s, self.store_s_dot, self.store_time = self.curr_s, self.curr_s_dot, self.curr_time
+            while not self.done() and \
+                not self.find_limit_curve_collisions(limit_curve=self.accel_limit_curve, accel=accel, forward=True) and \
+                not self.curr_s_dot <= 0:
+                accel = -1 * abs(self.calc_min_s_dot2(self.prev_s, self.prev_s_dot))
+                self.integrate_forward(accel)
+                self.forward_path.append((self.curr_s, self.curr_s_dot, self.curr_time))
+            self.forward_path.append((self.curr_s, self.curr_s_dot, self.curr_time))
+            print(f"AFTER FORWARD DECELERATION: S = {self.curr_s}, S_DOT = {self.curr_s_dot}")
+            # self.prev_s, self.prev_s_dot, self.prev_time = store_prev_s, store_prev_s_dot, store_prev_time
+            # self.curr_s, self.curr_s_dot, self.curr_time = store_curr_s, store_curr_s_dot, store_curr_time
+            for s, s_dot in self.accel_limit_curve.inflection_pts:
+                if s <= self.curr_s:
+                    continue
+                print(f"NEXT | S = {s} | S_DOT = {s_dot}")
+                self.backward_path = []
+                self.prev_s, self.prev_s_dot = s, s_dot
+                self.curr_s, self.curr_s_dot = s - (constants.epsilon * 1.5), s_dot
+                accel = self.calc_max_s_dot2(self.prev_s, self.prev_s_dot)
+                collides_with_forward_path = False
+                while not self.done() and \
+                    not self.find_limit_curve_collisions(limit_curve=self.accel_limit_curve, accel=accel, forward=False) and \
+                    not self.curr_s_dot <= 0:
+                    if self.find_path_collision(self.forward_path):
+                        collides_with_forward_path = True
+                        break
+                    accel = self.calc_max_s_dot2(self.prev_s, self.prev_s_dot)
+                    self.integrate_backward(accel)
+                    self.backward_path.append((self.curr_s, self.curr_s_dot, self.curr_time))
+                if self.backward_path and collides_with_forward_path:
+                    self.prev_s, self.prev_s_dot = s, s_dot
+                    self.curr_s, self.curr_s_dot = s, s_dot - (constants.epsilon * 1.5)
+                    break
+                self.plot_path(self.forward_path, 'red')
+            self.final_path.extend(self.forward_path)
+            self.final_path.extend(self.backward_path[::-1])
+            self.fig, self.axs = plt.subplots(3, 2, figsize=(20, 8))
+            self.plot_inflection_pts()
+            self.plot_limit_curve()
+            self.plot_path(self.final_path, 'green')
+            if self.forward_path:
+                self.plot_path(self.forward_path, 'red')
+            if self.backward_path:
+                self.plot_path(self.backward_path, 'blue')
+            
+            self.forward_path = []
+            self.backward_path = []
+            plt.show()
+        # ------------ VISUALIZE ALL BACKWARD PATHS ------------
+        # for s, s_dot in self.accel_limit_curve.inflection_pts:
+        #     self.final_path = []
+        #     self.curr_s = s
+        #     self.curr_s_dot = s_dot - (constants.epsilon * 1.5)
+        #     while not self.done() and \
+        #           not self.find_limit_curve_collisions(limit_curve=self.vel_limit_curve, accel=accel, forward=True) and \
+        #           not self.find_limit_curve_collisions(limit_curve=self.accel_limit_curve, accel=accel, forward=True) and \
+        #           not self.curr_s == 0 and \
+        #           not self.curr_s_dot == 0:
+        #         self.final_path.append((self.curr_s, self.curr_s_dot, self.curr_time))
+        #         accel = self.calc_max_s_dot2(self.prev_s, self.prev_s_dot)
+        #         self.integrate_backward(accel)
+        #     self.final_path.append((self.curr_s, self.curr_s_dot, self.curr_time))
+        #     if self.final_path:
+        #         print(s, s_dot)
+        #         self.plot_path(self.final_path, 'green')
+
+        # ------------ SOME RANDOM SHIT ------------
+        # accel = self.calc_min_s_dot2(self.prev_s, self.prev_s_dot)
+        # while not self.done() and \
+        #       not self.find_limit_curve_collisions(accel=False, forward=False) and \
+        #       not self.find_limit_curve_collisions(accel=True, forward=False) and \
+        #       not self.curr_s == 0:
+        #     self.integrate_backward()
 
         # extract (position, velocity, time) for all s_interval + switching points
-        self.final_path = self.forward_path
+        # self.final_path = self.forward_path
         # self.output_trajectory()
 
     def output_trajectory(self):
@@ -190,7 +260,7 @@ class Trajectory:
             if self.intersect(A, B, C, D):
                 self.forward_path = self.forward_path[0:i]
                 return True
-        return None
+        return False
     
     def ccw(self, A,B,C):
         return (C[1]-A[1]) * (B[0]-A[0]) > (B[1]-A[1]) * (C[0]-A[0])
@@ -339,7 +409,7 @@ class Trajectory:
             
     def plot_limit_curve(self):
         # plot limit curve
-        s = np.linspace(0, 1, 500)[:-1]
+        s = np.linspace(0, 1, constants.accel_curve_sampling_frequency)[:-1]
         s_dot_max_vel = [self.vel_limit_curve.evaluate(i) for i in s]
         s_dot_max_accel = [self.accel_limit_curve.evaluate(i) for i in s]
         self.axs[2, 1].scatter(s, s_dot_max_vel, s=2)
@@ -357,9 +427,9 @@ class Trajectory:
         s, s_dot_max, _ = list(zip(*self.backward_path))
         self.axs[2, 1].scatter(s, s_dot_max, s=2)   
 
-    def plot_path(self):
-        s, s_dot_max, _ = list(zip(*self.final_path))
-        self.axs[2, 1].scatter(s, s_dot_max, s=2)
+    def plot_path(self, path, color):
+        s, s_dot_max, _ = list(zip(*path))
+        self.axs[2, 1].scatter(s, s_dot_max, color=color, s=2)
     
     def plot_intersection_points(self):
         # plot intersection pts
@@ -376,6 +446,6 @@ class Trajectory:
 
     def plot_inflection_pts(self):
         # plot inflection pts
-        s, s_dot_max = list(zip(*self.inflection_pts))
+        s, s_dot_max = list(zip(*self.accel_limit_curve.inflection_pts))
         self.axs[2, 1].scatter(s, s_dot_max, color='red', s=8)   
  

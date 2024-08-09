@@ -3,9 +3,11 @@ import math
 timestep = 0.01 #sec
 epsilon = 0.005 #s/sec
 
-inflection_epsilon = 0.001 # s
+accel_curve_inflection_epsilon = 5.0 # unitless (technically slope)
+vel_curve_inflection_epsilon = 0.001 # s
 parabolic_epsilon = 0.00001 # s
-s_theta_sampling_frequency = 5000 # num_pts
+s_theta_sampling_frequency = 500 # num_pts
+accel_curve_sampling_frequency = 1000 # num_pts
 discretization = 1000
 blend_radius = 10 # deg
 # sandbox examples

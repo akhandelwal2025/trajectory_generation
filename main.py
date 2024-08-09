@@ -8,9 +8,10 @@ def main():
     traj = Trajectory(constants.waypoints, constants.velocity_constraints, constants.accel_constraints)
     traj.plot_segments()
     traj.plot_limit_curve()
+    traj.plot_inflection_pts()
     traj.generate_trajectory()
-    traj.plot_path()
-    # traj.plot_inflection_pts()
+    # traj.plot_path()
+    
     # traj.plot_intersection_points()
     # for forw_path in traj.forward_path:
     #     print(forw_path)

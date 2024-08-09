@@ -68,17 +68,18 @@ class Trajectory:
     """
     def generate_trajectory(self):
         # step 2
+        accel = self.calc_max_s_dot2(self.prev_s, self.prev_s_dot)
         while not self.done() and \
-              not self.find_limit_curve_collisions(accel=False, forward=True) and \
-              not self.find_limit_curve_collisions(accel=True, forward=True):
+              not self.find_limit_curve_collisions(limit_curve=self.vel_limit_curve, accel=accel, forward=True) and \
+              not self.find_limit_curve_collisions(limit_curve=self.accel_limit_curve, accel=accel, forward=True):
+            self.forward_path.append((self.curr_s, self.curr_s_dot, self.curr_time))
             self.integrate_forward()
-        print(self.forward_path[-2])
-        self.curr_s, self.curr_s_dot, _ = self.forward_path[-3]
+        
+        accel = self.calc_min_s_dot2(self.prev_s, self.prev_s_dot)
         while not self.done() and \
               not self.find_limit_curve_collisions(accel=False, forward=False) and \
               not self.find_limit_curve_collisions(accel=True, forward=False) and \
               not self.curr_s == 0:
-            print(self.curr_s, self.curr_s_dot)
             self.integrate_backward()
 
         # extract (position, velocity, time) for all s_interval + switching points
@@ -221,81 +222,60 @@ class Trajectory:
                 i. do nothing - s_dot is within bounds for a collision
             b. s_dot > limit_curve(s) && abs(s_dot - limit_curve(s)) > epsilon
                 i. need to go backward to find a precise collision point
-    """
-    def find_limit_curve_collisions(self, accel, forward):
-        if accel:
-            lim_curve_s_dot = self.accel_limit_curve.evaluate(self.curr_s)
-        else:
-            lim_curve_s_dot = self.vel_limit_curve.evaluate(self.curr_s)
-
-        if self.curr_s_dot < lim_curve_s_dot and (lim_curve_s_dot - self.curr_s_dot) > constants.epsilon:
-            if forward:
-                self.forward_path.append((self.curr_s, self.curr_s_dot, self.curr_time))
-            else:
-                self.backward_path.append((self.curr_s, self.curr_s_dot, self.curr_time))
-            return False
         
+        fields:
+            limit_curve: one of self.vel_limit_curve or self.accel_limit_curve
+            accel (float): acceleration used for integration
+            forward (bool): if True -> add to timestep. if False -> subtract from timestep 
+    """
+
+    def find_limit_curve_collisions(self, limit_curve, accel, forward):
+        lim_curve_s_dot = limit_curve.evaluate(self.curr_s)
+        if self.curr_s_dot < lim_curve_s_dot and (lim_curve_s_dot - self.curr_s_dot) > constants.epsilon:
+            return False
+    
         # case a
         if abs(lim_curve_s_dot - self.curr_s_dot) <= constants.epsilon:
-            if forward:
-                self.forward_path.append((self.curr_s, self.curr_s_dot, self.curr_time))
-            else:
-                self.backward_path.append((self.curr_s, self.curr_s_dot, self.curr_time))
             return True
 
         # case b - find (s, s_dot) for precise collision point
         lower_timestep = 0
         upper_timestep = constants.timestep
-        while self.curr_s_dot > lim_curve_s_dot and abs(lim_curve_s_dot - self.curr_s_dot) > constants.epsilon: 
+        while self.curr_s_dot > lim_curve_s_dot and abs(lim_curve_s_dot - self.curr_s_dot) > constants.epsilon:
             timestep = (lower_timestep + upper_timestep) / 2
+            self.curr_s_dot = self.prev_s_dot + accel * timestep # v_final = v_initial + a*delta_t
+            self.curr_s = self.prev_s + (self.prev_s_dot * timestep) + (0.5 * accel * (timestep ** 2))# s_final = s_initial + v_initial*delta_t + 1/2*a*delta_t^2 
             if forward:
-                max_s_dot2 = self.calc_max_s_dot2(self.prev_s, self.prev_s_dot)
-                self.curr_s_dot = self.prev_s_dot + max_s_dot2 * timestep # v_final = v_initial + a*delta_t
-                self.curr_s = self.prev_s + (self.prev_s_dot * timestep) + (0.5 * max_s_dot2 * (timestep ** 2))# s_final = s_initial + v_initial*delta_t + 1/2*a*delta_t^2 
                 self.curr_time = self.prev_time + timestep
             else:
-                min_s_dot2 = self.calc_min_s_dot2(self.prev_s, self.prev_s_dot)
-                self.curr_s_dot = self.prev_s_dot - min_s_dot2 * timestep # v_final = v_initial + a*delta_t
-                self.curr_s = self.prev_s - (self.prev_s_dot * timestep) + (0.5 * min_s_dot2 * (timestep ** 2)) # s_final = s_initial + v_initial*delta_t + 1/2*a*delta_t^2 
                 self.curr_time = self.prev_time - timestep
-
+            
             # if resulting s_dot is above lim_curve_s_dot, then set upper_timestep = timestep
-            if accel:
-                lim_curve_s_dot = self.accel_limit_curve.evaluate(self.curr_s)
-            else:
-                lim_curve_s_dot = self.vel_limit_curve.evaluate(self.curr_s)
-
+            lim_curve_s_dot = limit_curve.evaluate(self.curr_s)
             if self.curr_s_dot > lim_curve_s_dot:
                 upper_timestep = timestep
             else:
                 lower_timestep = timestep
-        if forward:
-            self.forward_path.append((self.curr_s, self.curr_s_dot, self.curr_time))
-        else:
-            self.backward_path.append((self.curr_s, self.curr_s_dot, self.curr_time))
         return True
 
-    def integrate_backward(self):
+    def integrate_backward(self, accel):
         # curr_s, curr_s_dot will be overwritten. need to store them in prev_s, prev_s_dot
         self.prev_s = self.curr_s
         self.prev_s_dot = self.curr_s_dot
         self.prev_time = self.curr_time
 
-        min_s_dot2 = self.calc_min_s_dot2(self.prev_s, self.prev_s_dot)
-        self.curr_s_dot = self.prev_s_dot - min_s_dot2 * constants.timestep # v_final = v_initial + a*delta_t
-        self.curr_s = self.prev_s - (self.prev_s_dot * constants.timestep) + (0.5 * min_s_dot2 * (constants.timestep ** 2)) # s_final = s_initial + v_initial*delta_t + 1/2*a*delta_t^2 
+        self.curr_s_dot = self.prev_s_dot - accel * constants.timestep # v_final = v_initial + a*delta_t
+        self.curr_s = self.prev_s - (self.prev_s_dot * constants.timestep) + (0.5 * accel * (constants.timestep ** 2)) # s_final = s_initial + v_initial*delta_t + 1/2*a*delta_t^2 
         self.curr_time = self.prev_time - constants.timestep
 
-    def integrate_forward(self):
+    def integrate_forward(self, accel):
         # curr_s, curr_s_dot, curr_time will be overwritten. need to store them in prev_s, prev_s_dot, prev_time
         self.prev_s = self.curr_s
         self.prev_s_dot = self.curr_s_dot
         self.prev_time = self.curr_time
 
-        max_s_dot2 = self.calc_max_s_dot2(self.prev_s, self.prev_s_dot)
-        print(max_s_dot2)
-        self.curr_s_dot = self.prev_s_dot + max_s_dot2 * constants.timestep # v_final = v_initial + a*delta_t
-        self.curr_s = self.prev_s + (self.prev_s_dot * constants.timestep) + (0.5 * max_s_dot2 * (constants.timestep ** 2)) # s_final = s_initial + v_initial*delta_t + 1/2*a*delta_t^2 
+        self.curr_s_dot = self.prev_s_dot + accel * constants.timestep # v_final = v_initial + a*delta_t
+        self.curr_s = self.prev_s + (self.prev_s_dot * constants.timestep) + (0.5 * accel * (constants.timestep ** 2)) # s_final = s_initial + v_initial*delta_t + 1/2*a*delta_t^2 
         self.curr_time = self.prev_time + constants.timestep
 
     # check if trajectory has reached the end 

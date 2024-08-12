@@ -26,6 +26,9 @@ class AccelerationLimitCurve:
                     if denom != 0:
                         numer = (joint_i.q_dot2_max / abs(f_i_prime)) + (joint_j.q_dot2_max / abs(f_j_prime))
                         s_dot_max = min(s_dot_max, math.sqrt(numer/denom))
+        # TODO: THIS IS VERY WRONG, THIS IMPLIES SOMETHING IS WRONG WITH TEH LIMIT CURVE
+        if s_dot_max < 0:
+            s_dot_max = float('inf')
         return s_dot_max
 
     # inflection pts are defined as any point on the acceleration limit curve that is a jump discontinuity or a nondifferentiable point
@@ -35,6 +38,7 @@ class AccelerationLimitCurve:
         s_sampled = np.linspace(0, 1, constants.accel_curve_sampling_frequency)[:-1]
         s_dot_max_accel = [self.evaluate(i) for i in s_sampled]
         self.inflection_pts = []
+        self.s_dot_floor = float('inf')
         for i in range(1, len(s_sampled)-1): # don't want first or last point
             prev = (s_sampled[i-1], s_dot_max_accel[i-1])
             curr = (s_sampled[i], s_dot_max_accel[i])
@@ -47,7 +51,8 @@ class AccelerationLimitCurve:
             if (abs(slope_AB - slope_BC) > constants.accel_curve_inflection_epsilon):
                 # print(f"({curr[0]}, {curr[1]}), SLOPE AB: {slope_AB}, SLOPE BC: {slope_BC}")
                 self.inflection_pts.append(curr)
-        print(len(self.inflection_pts))
+                self.s_dot_floor = min(self.s_dot_floor, curr[1])
+        self.s_dot_floor = 0.2
             
 class VelocityLimitCurve:
     def __init__(self, joint_paths):

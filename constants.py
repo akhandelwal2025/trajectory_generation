@@ -1,4 +1,5 @@
 import math
+import utils
 
 timestep = 0.01 #sec
 epsilon = 0.005 #s/sec
@@ -52,6 +53,7 @@ waypoints = [
     [3.60445397, -0.23282692, 0.88784899, -0.86515971, 6.1845742, -0.0191986],
     [3.83501197, -0.89203778, 1.06465, -0.33911747, 2.4389231, -0.08831366],
 ]
+waypoints = utils.waypoints_rad_2_deg(waypoints)
 
 velocity_constraints = [180, 180, 180, 180, 180, 180] # deg/s
 accel_constraints = [50, 50, 50, 50, 50, 50] # deg^2/s

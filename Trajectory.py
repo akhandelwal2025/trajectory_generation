@@ -138,18 +138,18 @@ class Trajectory:
                     self.curr_s, self.curr_s_dot, self.curr_time = s, s_dot - (constants.epsilon * 1.5), self.final_path[-1][2]
                     break                    
             
-            self.fig, self.axs = plt.subplots(3, 2, figsize=(20, 8))
-            self.plot_inflection_pts()
-            self.plot_limit_curve()
-            for path_elem in self.final_path:
-                print(path_elem)
-            if self.final_path:
-                self.plot_path(self.final_path, 'green')
-            if self.forward_path:
-                self.plot_path(self.forward_path, 'red')
-            if self.backward_path:
-                self.plot_path(self.backward_path, 'blue')
-            plt.show()
+            # self.fig, self.axs = plt.subplots(3, 2, figsize=(20, 8))
+            # self.plot_inflection_pts()
+            # self.plot_limit_curve()
+            # for path_elem in self.final_path:
+            #     print(path_elem)
+            # if self.final_path:
+            #     self.plot_path(self.final_path, 'green')
+            # if self.forward_path:
+            #     self.plot_path(self.forward_path, 'red')
+            # if self.backward_path:
+            #     self.plot_path(self.backward_path, 'blue')
+            # plt.show()
 
             
             # try integrating with max decel from end of forward path to the inflection point
@@ -236,16 +236,14 @@ class Trajectory:
         self.backward_path = self.fix_back_path_timestamps(self.final_path, self.backward_path[::-1])
         self.final_path.extend(self.backward_path)
 
-        self.fig, self.axs = plt.subplots(3, 2, figsize=(20, 8))
         self.plot_inflection_pts()
         self.plot_limit_curve()
         self.plot_path(self.final_path, 'green')
-        
         # if self.forward_path:
         #     self.plot_path(self.forward_path, 'red')
         # if self.backward_path:
         #     self.plot_path(self.backward_path, 'blue')
-        plt.show()
+        
         # ------------ VISUALIZE ALL BACKWARD PATHS ------------
         # self.plot_path(self.forward_path, 'red')
         # for s, s_dot in self.accel_limit_curve.inflection_pts:

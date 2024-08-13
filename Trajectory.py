@@ -77,8 +77,6 @@ class Trajectory:
         self.forward_path.append((self.curr_s, self.curr_s_dot, self.curr_time))
         
         while not self.done():
-            print("STARTING NEW ITERATION")
-            print(self.curr_s, self.curr_s_dot)
             self.curr_s_dot -= (constants.epsilon * 2)
             self.store_s, self.store_s_dot, self.store_time = self.curr_s, self.curr_s_dot, self.curr_time
             idx_cross_floor = -1
@@ -86,7 +84,6 @@ class Trajectory:
                 not self.find_limit_curve_collisions(limit_curve=self.accel_limit_curve, accel=accel, forward=True) and \
                 not self.curr_s_dot <= 0:
                 if self.curr_s_dot < self.accel_limit_curve.s_dot_floor and idx_cross_floor == -1:
-                    print(f"S_DOT METRICS: {self.curr_s_dot}, {self.accel_limit_curve.s_dot_floor}")
                     idx_cross_floor = len(self.forward_path)-1
                 accel = -1 * abs(self.calc_min_s_dot2(self.prev_s, self.prev_s_dot))
                 self.integrate_forward(accel)
@@ -183,7 +180,6 @@ class Trajectory:
             if not collides_with_forward_path:
                 self.backward_path = []
                 self.forward_path = self.forward_path[:idx_cross_floor] # cut forward path to just include deceleration to floor
-                print(self.forward_path)
                 self.curr_s, self.curr_s_dot, self.curr_time = self.forward_path[-1]
                 accel = self.calc_max_s_dot2(self.prev_s, self.prev_s_dot)
                 while not self.done() and \
@@ -197,26 +193,25 @@ class Trajectory:
             
             self.forward_path = []
             self.backward_path = []
-            # self.fig, self.axs = plt.subplots(3, 2, figsize=(20, 8))
-            # self.plot_inflection_pts()
-            # self.plot_limit_curve()
-            # self.plot_path(self.final_path, 'green')
-            # if self.forward_path:
-            #     self.plot_path(self.forward_path, 'red')
-            # if self.backward_path:
-            #     self.plot_path(self.backward_path, 'blue')
-            # print(f"AT END OF ITERATION: {self.curr_s, self.curr_s_dot}")
+            self.fig, self.axs = plt.subplots(3, 2, figsize=(20, 8))
+            self.plot_inflection_pts()
+            self.plot_limit_curve()
+            self.plot_path(self.final_path, 'green')
+            if self.forward_path:
+                self.plot_path(self.forward_path, 'red')
+            if self.backward_path:
+                self.plot_path(self.backward_path, 'blue')
+            print(f"AT END OF ITERATION: {self.curr_s, self.curr_s_dot}")
             
-            # plt.show()
+            plt.show()
         
         # now need to integrate backward from final position and see where it intersects the previous curve
+        self.prev_s, self.prev_s_dot = 1.0, 0.0
         self.curr_s, self.curr_s_dot = 1.0, 0.0
         while not self.done() and \
                 not self.find_limit_curve_collisions(limit_curve=self.accel_limit_curve, accel=accel, forward=False) and \
                 not self.curr_s_dot < 0:
-                print("lmasldkfja;sdlk")
                 if self.find_path_collision(self.final_path):
-                    print("breaking for whatever fucking reason")
                     break
                 accel = -1 * abs(self.calc_min_s_dot2(self.prev_s, self.prev_s_dot))
                 self.integrate_backward(accel)
@@ -228,10 +223,10 @@ class Trajectory:
         self.plot_inflection_pts()
         self.plot_limit_curve()
         self.plot_path(self.final_path, 'green')
-        if self.forward_path:
-            self.plot_path(self.forward_path, 'red')
-        if self.backward_path:
-            self.plot_path(self.backward_path, 'blue')
+        # if self.forward_path:
+        #     self.plot_path(self.forward_path, 'red')
+        # if self.backward_path:
+        #     self.plot_path(self.backward_path, 'blue')
         plt.show()
         # ------------ VISUALIZE ALL BACKWARD PATHS ------------
         # self.plot_path(self.forward_path, 'red')

@@ -133,16 +133,17 @@ class Trajectory:
                     self.curr_s, self.curr_s_dot = s, s_dot - (constants.epsilon * 1.5)
                     break                    
             
-            # self.fig, self.axs = plt.subplots(3, 2, figsize=(20, 8))
-            # self.plot_inflection_pts()
-            # self.plot_limit_curve()
-            # if self.final_path:
-            #     self.plot_path(self.final_path, 'green')
-            # if self.forward_path:
-            #     self.plot_path(self.forward_path, 'red')
-            # if self.backward_path:
-            #     self.plot_path(self.backward_path, 'blue')
-            # plt.show()
+            self.fig, self.axs = plt.subplots(3, 2, figsize=(20, 8))
+            self.plot_inflection_pts()
+            self.plot_limit_curve()
+            if self.final_path:
+                self.plot_path(self.final_path, 'green')
+            if self.forward_path:
+                self.plot_path(self.forward_path, 'red')
+            if self.backward_path:
+                self.plot_path(self.backward_path, 'blue')
+            plt.show()
+
             # backward integration from future inflection pts didn't work, so integrate forward from artificial floor
             if not collides_with_forward_path:
                 self.backward_path = []
@@ -160,6 +161,8 @@ class Trajectory:
 
             self.final_path.extend(self.forward_path)
             self.final_path.extend(self.backward_path[::-1])
+            self.forward_path = []
+            self.backward_path = []
             # self.fig, self.axs = plt.subplots(3, 2, figsize=(20, 8))
             # self.plot_inflection_pts()
             # self.plot_limit_curve()
@@ -169,8 +172,7 @@ class Trajectory:
             # if self.backward_path:
             #     self.plot_path(self.backward_path, 'blue')
             # print(f"AT END OF ITERATION: {self.curr_s, self.curr_s_dot}")
-            # self.forward_path = []
-            # self.backward_path = []
+            
             # plt.show()
         
         # now need to integrate backward from final position and see where it intersects the previous curve

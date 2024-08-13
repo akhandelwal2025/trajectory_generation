@@ -52,7 +52,7 @@ class AccelerationLimitCurve:
                 # print(f"({curr[0]}, {curr[1]}), SLOPE AB: {slope_AB}, SLOPE BC: {slope_BC}")
                 self.inflection_pts.append(curr)
                 self.s_dot_floor = min(self.s_dot_floor, curr[1])
-        self.s_dot_floor = 0.2
+        self.s_dot_floor = 0.05
             
 class VelocityLimitCurve:
     def __init__(self, joint_paths):
